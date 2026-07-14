@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa rozvozu ovoce</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --gruen: #4a7729; --dunkel: #2f4a1a; --hell: #f4f7ef;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: "Segoe UI", Arial, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #sidebar {
+    width: 350px; min-width: 350px; background: var(--hell); border-right: 1px solid #d5ddc8;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  #kopf { background: var(--gruen); color: #fff; padding: 14px 16px; }
+  #kopf h1 { margin: 0 0 4px; font-size: 19px; }
+  #kopf .status { font-size: 12px; opacity: .9; }
+  #map { flex: 1; }
+  .block { padding: 12px 16px; border-bottom: 1px solid #e0e6d5; }
+  .block h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--dunkel); }
+  button.gross {
+    width: 100%; padding: 10px; font-size: 15px; border: 0; border-radius: 6px;
+    background: var(--gruen); color: #fff; cursor: pointer; font-weight: 600;
+  }
+  button.gross:hover { background: var(--dunkel); }
+  button.klein {
+    padding: 4px 10px; font-size: 12px; border: 1px solid #b9c5a5; border-radius: 5px;
+    background: #fff; cursor: pointer; color: #333;
+  }
+  button.klein.aktiv { background: var(--gruen); color: #fff; border-color: var(--gruen); }
+  .zeile { display: flex; gap: 6px; flex-wrap: wrap; }
+  label.obst {
+    display: flex; align-items: center; gap: 6px; font-size: 14px; padding: 3px 0; cursor: pointer;
+  }
+  .punkt { width: 13px; height: 13px; border-radius: 50%; display: inline-block; flex: none; }
+  table.summen { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.summen td { padding: 3px 0; }
+  table.summen td.z { text-align: right; font-weight: 600; white-space: nowrap; padding-left: 8px; }
+  #stopps { font-size: 13px; }
+  .stopp { padding: 7px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .stopp:hover { background: #e8eedb; border-color: #cdd8b8; }
+  .stopp b { display: block; }
+  .stopp .grau { color: #666; }
+  .stopp.erledigt { opacity: .55; }
+  #fehler { color: #a33; font-size: 12.5px; line-height: 1.5; }
+  #ladehinweis {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1200;
+    background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 8px 16px;
+    font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.15); display: none;
+  }
+  .marker-label { background: transparent; border: 0; }
+  .marker-kreis {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; color: #fff; font-weight: 700; font-size: 11px;
+    border: 2.5px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4);
+    white-space: nowrap;
+  }
+  .marker-kreis.erledigt { opacity: .5; }
+  .popup-lief { font-size: 13px; }
+  .popup-lief h3 { margin: 0 0 6px; font-size: 15px; }
+  .popup-lief table { border-collapse: collapse; }
+  .popup-lief td { padding: 2px 8px 2px 0; vertical-align: top; }
+  .popup-lief .sum { border-top: 1px solid #ccc; font-weight: 700; }
+  .haken { color: #2e7d32; font-weight: 700; }
+  .offen-punkt { color: #c62828; font-weight: 700; }
+  input[type=date] { font-size: 13px; padding: 3px; border: 1px solid #b9c5a5; border-radius: 4px; }
+  @media (max-width: 700px) {
+    #app { flex-direction: column; }
+    #sidebar { width: 100%; min-width: 0; max-height: 45%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div id="kopf">
+      <h1>🍒 Mapa rozvozu ovoce</h1>
+      <div class="status" id="status">Žádný excelový soubor není připojen</div>
+    </div>
+
+    <div class="block">
+      <button class="gross" id="btnDatei">📂 Vybrat excelový soubor (Obst.xlsx)</button>
+      <div style="font-size:12px;color:#555;margin-top:6px">
+        Mapa se aktualizuje automaticky, jakmile soubor v Excelu uložíte.
+      </div>
+    </div>
+
+    <div class="block" id="statusBlock" style="display:none">
+      <h2>Stav rozvozu</h2>
+      <div class="zeile" id="statusKnoepfe">
+        <button class="klein aktiv" data-s="offen">🔴 Ještě rozvézt</button>
+        <button class="klein" data-s="geliefert">✓ Doručeno</button>
+        <button class="klein" data-s="alle">Vše</button>
+      </div>
+    </div>
+
+    <div class="block" id="zeitBlock" style="display:none">
+      <h2>Období</h2>
+      <div class="zeile" id="zeitKnoepfe">
+        <button class="klein aktiv" data-z="alle">Vše</button>
+        <button class="klein" data-z="heute">Dnes</button>
+        <button class="klein" data-z="7tage">Příštích 7 dní</button>
+      </div>
+      <div class="zeile" style="margin-top:8px;align-items:center">
+        <input type="date" id="von"> <span style="font-size:12px">do</span> <input type="date" id="bis">
+      </div>
+    </div>
+
+    <div class="block" id="obstBlock" style="display:none">
+      <h2>Druhy ovoce</h2>
+      <div id="obstFilter"></div>
+    </div>
+
+    <div class="block">
+      <h2>Součty (výběr)</h2>
+      <table class="summen" id="summen"></table>
+    </div>
+
+    <div class="block">
+      <h2>Zastávky</h2>
+      <div id="stopps">–</div>
+    </div>
+
+    <div class="block" id="fehlerBlock" style="display:none">
+      <h2>⚠️ Adresa nenalezena</h2>
+      <div id="fehler"></div>
+    </div>
+  </div>
+  <div id="map"></div>
+</div>
+<div id="ladehinweis">Hledám adresy na mapě …</div>
+
+<script>
+"use strict";
+// ------------------------------------------------------------------
+// Mapa rozvozu ovoce: načte excelový seznam (Obst.xlsx) a ukáže
+// zastávky na mapě. Podporuje dva formáty:
+//  A) Obst.xlsx: Doručeno | Jméno | kg | €/kg | € | Adresa | Poznámka
+//     (řádek s nadpisem = druh ovoce, např. "Weichsel", bloků může být víc)
+//  B) Šablona:   Datum | Kunde | Adresse | PLZ | Ort | Obst | Menge | Notiz
+// ------------------------------------------------------------------
+
+function farbeFuer(obst) {
+  const s = String(obst || "").toLowerCase();
+  if (/^(weichsel|kirsch|višn|visn|třešn|tresn)/.test(s)) return "#8e1b3a";
+  if (/^(zwetschk|pflaume|švestk|svestk)/.test(s)) return "#5b3d8f";
+  if (/^(birne|hrušk|hrusk)/.test(s)) return "#7a9a01";
+  if (/^(apfel|äpfel|jablk)/.test(s)) return "#cc2b2b";
+  if (/^(marille|aprikose|meruňk|merunk)/.test(s)) return "#e8930c";
+  if (/^(erdbeer|jahod)/.test(s)) return "#d81b60";
+  if (/^(nuss|walnuss|ořech|orech)/.test(s)) return "#6d4c41";
+  return "#b8860b";
+}
+const FARBE_GEMISCHT = "#555555";
+const OBST_MUSTER = /^(weichsel|zwetschk|birne|apfel|äpfel|kirsch|marille|aprikose|pflaume|erdbeer|himbeer|nuss|walnuss|obst|višn|visn|třešn|tresn|švestk|svestk|hrušk|hrusk|jablk|meruňk|merunk|jahod|malin|ořech|orech|ovoce)/i;
+
+let karte, markerGruppe;
+let alleZeilen = [];
+let dateiHandle = null;
+let letzteAenderung = 0;
+let leseFehler = 0;
+let obstAuswahl = new Set();
+let zeitModus = "alle";
+let statusModus = "offen";
+let geocodeLaeuft = false;
+
+// ---------- Mapa ----------
+function initKarte() {
+  karte = L.map("map").setView([47.7, 14.5], 7); // Rakousko
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(karte);
+  markerGruppe = L.layerGroup().addTo(karte);
+}
+
+// ---------- Načtení Excelu ----------
+function normKopf(s) { return String(s || "").toLowerCase().replace(/[^a-zäöü]/g, ""); }
+function putz(s) {
+  return String(s ?? "").replace(/ /g, " ").replace(/\s+/g, " ").replace(/^[,\s]+|[,\s.]+$/g, "").trim();
+}
+
+function parseWorkbook(buf) {
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+  const zeilen = [];
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    const arr = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    if (!arr.length) continue;
+    const kopf = (arr[0] || []).map(normKopf);
+    if (kopf.includes("kunde") && (kopf.includes("ort") || kopf.includes("adresse")))
+      parseVorlage(arr, kopf, zeilen);
+    else
+      parseObstListe(arr, name, wb.SheetNames.length > 1 ? name : "", zeilen);
+  }
+  return zeilen;
+}
+
+// Formát B: šablona s pojmenovanými sloupci
+function parseVorlage(arr, kopf, zeilen) {
+  const idx = {};
+  kopf.forEach((k, i) => {
+    if (k.startsWith("datum")) idx.datum = i;
+    else if (k.startsWith("kunde") || k.startsWith("name")) idx.kunde = i;
+    else if (k.startsWith("adresse") || k.startsWith("strae") || k.startsWith("strasse")) idx.adresse = i;
+    else if (k === "plz") idx.plz = i;
+    else if (k.startsWith("ort")) idx.ort = i;
+    else if (k.startsWith("obst") || k.startsWith("sorte") || k.startsWith("produkt")) idx.obst = i;
+    else if (k.startsWith("menge")) idx.menge = i;
+    else if (k.startsWith("notiz") || k.startsWith("bemerkung")) idx.notiz = i;
+    else if (k.startsWith("geliefert") || k.startsWith("erledigt")) idx.geliefert = i;
+  });
+  for (let r = 1; r < arr.length; r++) {
+    const row = arr[r];
+    const z = {
+      datum: idx.datum != null ? parseDatum(row[idx.datum]) : null,
+      kunde: putz(row[idx.kunde]),
+      adresse: putz(row[idx.adresse]),
+      plz: putz(row[idx.plz]),
+      ort: putz(row[idx.ort]),
+      obst: putz(row[idx.obst]) || "Ovoce",
+      menge: parseMenge(row[idx.menge]),
+      notiz: putz(row[idx.notiz]),
+      preis: null, summe: null,
+      geliefert: idx.geliefert != null ? istWahr(row[idx.geliefert]) : undefined,
+    };
+    if (!z.kunde && !z.ort && !z.adresse) continue;
+    zeilen.push(z);
+  }
+}
+
+// Formát A: Obst.xlsx (Doručeno | Jméno | kg | €/kg | € | Adresa | Poznámka)
+function parseObstListe(arr, blattName, obstStart, zeilen) {
+  let obst = OBST_MUSTER.test(blattName) ? blattName : (obstStart || "");
+  for (let r = 0; r < arr.length; r++) {
+    const row = arr[r];
+    const name = putz(row[1]);
+    const adresse = putz(row[5]);
+    const mengeRoh = row[2];
+    const hatMenge = mengeRoh !== "" && mengeRoh != null && String(mengeRoh).trim() !== "";
+    // Řádek s nadpisem: druh ovoce ve sloupci B, bez množství a adresy
+    if (name && !adresse && !hatMenge && (r === 0 || OBST_MUSTER.test(name))) { obst = name; continue; }
+    if (!name && !adresse) continue; // prázdný nebo součtový řádek
+    zeilen.push({
+      datum: null,
+      kunde: name, adresse, plz: "", ort: "",
+      obst: obst || "Ovoce",
+      menge: parseMenge(mengeRoh),
+      preis: parseMenge(row[3]) || null,
+      summe: parseMenge(row[4]) || null,
+      notiz: putz(row[6]),
+      geliefert: istWahr(row[0]),
+    });
+  }
+}
+
+function istWahr(v) {
+  if (v === true) return true;
+  return /^(ja|ano|x|wahr|true|1|erledigt|hotovo)$/i.test(String(v ?? "").trim());
+}
+
+function parseDatum(v) {
+  if (v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+  if (typeof v === "number") {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  const m = String(v).trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
+  if (m) {
+    let jahr = +m[3]; if (jahr < 100) jahr += 2000;
+    return new Date(jahr, +m[2] - 1, +m[1]);
+  }
+  if (!String(v).trim()) return null;
+  const d2 = new Date(v);
+  return isNaN(d2) ? null : new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+}
+
+function parseMenge(v) {
+  if (typeof v === "number") return v;
+  const s = String(v ?? "").trim();
+  if (!s) return 0;
+  const n = parseFloat(s.replace(/\./g, "").replace(",", "."));
+  return isNaN(n) ? 0 : n;
+}
+
+// ---------- Připojení souboru (File System Access API) ----------
+const unterstuetztFS = "showOpenFilePicker" in window;
+
+async function dateiWaehlen() {
+  try {
+    if (unterstuetztFS) {
+      const [h] = await window.showOpenFilePicker({
+        types: [{ description: "Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }]
+      });
+      dateiHandle = h;
+      await handleMerken(h);
+      await dateiLesen(true);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = ".xlsx";
+      inp.onchange = async () => {
+        const f = inp.files[0];
+        if (!f) return;
+        const buf = await f.arrayBuffer();
+        datenUebernehmen(parseWorkbook(new Uint8Array(buf)));
+        setStatus(`Soubor „${f.name}" načten – pro aktualizaci ho vyberte znovu (prohlížeč bez auto-aktualizace)`);
+      };
+      inp.click();
+    }
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    console.error(e);
+    setStatus("Chyba při otevírání souboru: " + e.message);
+  }
+}
+
+async function dateiLesen(erzwingen) {
+  if (!dateiHandle) return;
+  let f, buf;
+  try {
+    f = await dateiHandle.getFile();
+    if (!erzwingen && f.lastModified === letzteAenderung) return;
+    buf = await f.arrayBuffer();
+  } catch (e) {
+    // soubor je právě zamčený Excelem/OneDrivem -> zkusíme to znovu
+    leseFehler++;
+    if (leseFehler === 4) setStatus(`⏳ Soubor „${dateiHandle.name}" je právě zamčený Excelem – mapa se aktualizuje, jakmile půjde znovu přečíst (po uložení/zavření).`);
+    return;
+  }
+  leseFehler = 0;
+  letzteAenderung = f.lastModified;
+  try {
+    datenUebernehmen(parseWorkbook(new Uint8Array(buf)));
+    const uhr = new Date().toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setStatus(`✅ Připojeno k „${f.name}" · aktualizováno ${uhr}`);
+  } catch (e) {
+    console.warn("Čtení se nezdařilo:", e);
+  }
+}
+
+setInterval(() => dateiLesen(false), 3000);
+
+function idb() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open("lieferkarte", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function handleMerken(h) {
+  try {
+    const db = await idb();
+    db.transaction("kv", "readwrite").objectStore("kv").put(h, "handle");
+  } catch (e) { /* není kritické */ }
+}
+async function handleWiederherstellen() {
+  if (!unterstuetztFS) return;
+  try {
+    const db = await idb();
+    const h = await new Promise((res) => {
+      const rq = db.transaction("kv").objectStore("kv").get("handle");
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null);
+    });
+    if (!h) return;
+    const stand = await h.queryPermission({ mode: "read" });
+    if (stand === "granted") {
+      dateiHandle = h; await dateiLesen(true);
+    } else {
+      const btn = document.getElementById("btnDatei");
+      btn.textContent = "🔄 Znovu připojit „" + h.name + "“";
+      btn.onclick = async () => {
+        if (await h.requestPermission({ mode: "read" }) === "granted") {
+          dateiHandle = h;
+          btn.textContent = "📂 Vybrat jiný excelový soubor";
+          btn.onclick = dateiWaehlen;
+          await dateiLesen(true);
+        }
+      };
+    }
+  } catch (e) { /* tak klasický dialog */ }
+}
+
+// ---------- Geokódování (Nominatim / OpenStreetMap) ----------
+const geoCache = JSON.parse(localStorage.getItem("geoCache") || "{}");
+
+function geoKey(z) { return [z.adresse, z.plz, z.ort].join("|").toLowerCase(); }
+
+// Několik pokusů na adresu, protože zápisy jsou volné
+function sucheVarianten(z) {
+  const basis = putz([z.adresse, [z.plz, z.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "))
+    .replace(/selbstabholung[,:]?\s*/i, "");
+  const v = [];
+  if (!basis) return v;
+  v.push({ q: basis + ", Österreich", cc: "" });
+  v.push({ q: basis, cc: "at,cz,de,sk,hu,si" });
+  // jen části s číslicemi (ulice + PSČ), kdyby vadily dodatky typu název hotelu
+  const seg = basis.split(",").map(s => s.trim()).filter(Boolean);
+  if (seg.length > 2) {
+    const mitZiffer = seg.filter(s => /\d/.test(s)).join(", ");
+    if (mitZiffer && mitZiffer !== basis) v.push({ q: mitZiffer + ", Österreich", cc: "" });
+  }
+  // poslední záchrana: jen PSČ
+  const plz = basis.match(/\b\d{4}\b/);
+  if (plz) v.push({ q: plz[0] + " Österreich", cc: "at" });
+  return v;
+}
+
+async function geokodieren(zeilen) {
+  const offen = [];
+  const gesehen = new Set();
+  for (const z of zeilen) {
+    const k = geoKey(z);
+    if (!(k in geoCache) && !gesehen.has(k) && (z.adresse || z.ort || z.plz)) { offen.push(z); gesehen.add(k); }
+  }
+  if (!offen.length) return;
+  geocodeLaeuft = true;
+  const hinweis = document.getElementById("ladehinweis");
+  hinweis.style.display = "block";
+  for (let i = 0; i < offen.length; i++) {
+    const z = offen[i];
+    hinweis.textContent = `Hledám adresy na mapě … (${i + 1}/${offen.length})`;
+    let treffer = null;
+    for (const v of sucheVarianten(z)) {
+      treffer = await nominatim(v.q, v.cc);
+      if (treffer) break;
+      await new Promise(r => setTimeout(r, 1100)); // Nominatim: max. 1 dotaz/s
+    }
+    geoCache[geoKey(z)] = treffer; // i „nenalezeno" si pamatujeme
+    localStorage.setItem("geoCache", JSON.stringify(geoCache));
+    aktualisiereAnsicht();
+    if (i < offen.length - 1) await new Promise(r => setTimeout(r, 1100));
+  }
+  hinweis.style.display = "none";
+  geocodeLaeuft = false;
+  aktualisiereAnsicht(true);
+}
+
+async function nominatim(anfrage, cc) {
+  try {
+    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1"
+      + (cc ? "&countrycodes=" + cc : "") + "&q=" + encodeURIComponent(anfrage);
+    const r = await fetch(url, { headers: { "Accept-Language": "de" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j.length) return null;
+    return { lat: +j[0].lat, lon: +j[0].lon };
+  } catch (e) { return null; }
+}
+
+// ---------- Převzetí dat a zobrazení ----------
+function datenUebernehmen(zeilen) {
+  alleZeilen = zeilen;
+
+  // filtr stavu jen tehdy, když existuje sloupec Doručeno
+  const hatStatus = zeilen.some(z => z.geliefert !== undefined);
+  document.getElementById("statusBlock").style.display = hatStatus ? "" : "none";
+
+  // filtr období jen tehdy, když jsou v datech datumy
+  const hatDatum = zeilen.some(z => z.datum);
+  document.getElementById("zeitBlock").style.display = hatDatum ? "" : "none";
+
+  // filtr druhů ovoce (jen při více druzích)
+  const sorten = [...new Set(zeilen.map(z => z.obst))].sort((a, b) => a.localeCompare(b, "cs"));
+  document.getElementById("obstBlock").style.display = sorten.length > 1 ? "" : "none";
+  const div = document.getElementById("obstFilter");
+  div.innerHTML = "";
+  for (const s of sorten) {
+    const lab = document.createElement("label");
+    lab.className = "obst";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = s;
+    cb.checked = !obstAuswahl.size || obstAuswahl.has(s);
+    cb.onchange = () => {
+      obstAuswahl = new Set([...div.querySelectorAll("input:checked")].map(c => c.value));
+      aktualisiereAnsicht(true);
+    };
+    lab.appendChild(cb);
+    const p = document.createElement("span"); p.className = "punkt"; p.style.background = farbeFuer(s);
+    lab.appendChild(p);
+    lab.appendChild(document.createTextNode(" " + s));
+    div.appendChild(lab);
+  }
+  obstAuswahl = new Set(sorten.filter(s => !obstAuswahl.size || obstAuswahl.has(s)));
+  if (!obstAuswahl.size) obstAuswahl = new Set(sorten);
+  aktualisiereAnsicht(true);
+  geokodieren(zeilen);
+}
+
+function imZeitraum(z) {
+  const von = document.getElementById("von").value ? new Date(document.getElementById("von").value) : null;
+  const bis = document.getElementById("bis").value ? new Date(document.getElementById("bis").value) : null;
+  if (!z.datum) return zeitModus === "alle" && !von && !bis;
+  const heute = new Date(); heute.setHours(0, 0, 0, 0);
+  if (von || bis) {
+    if (von && z.datum < von) return false;
+    if (bis && z.datum > bis) return false;
+    return true;
+  }
+  if (zeitModus === "heute") return z.datum.getTime() === heute.getTime();
+  if (zeitModus === "7tage") {
+    const ende = new Date(heute); ende.setDate(ende.getDate() + 7);
+    return z.datum >= heute && z.datum <= ende;
+  }
+  return true;
+}
+
+function imStatus(z) {
+  if (z.geliefert === undefined || statusModus === "alle") return true;
+  return statusModus === "geliefert" ? z.geliefert : !z.geliefert;
+}
+
+function gefiltert() {
+  const zeitAktiv = document.getElementById("zeitBlock").style.display !== "none";
+  return alleZeilen.filter(z => (!zeitAktiv || imZeitraum(z)) && imStatus(z) && obstAuswahl.has(z.obst));
+}
+
+function fmtDatum(d) {
+  return d ? d.toLocaleDateString("cs-CZ", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+}
+function fmtKg(n) { return n.toLocaleString("cs-CZ") + " kg"; }
+function fmtEur(n) { return n.toLocaleString("cs-CZ", { maximumFractionDigits: 0 }) + " €"; }
+function zastavky(n) { return n === 1 ? "1 zastávka" : (n >= 2 && n <= 4 ? n + " zastávky" : n + " zastávek"); }
+function markerText(kg) {
+  if (!kg) return "?";
+  return kg >= 1000 ? (kg / 1000).toLocaleString("cs-CZ", { maximumFractionDigits: 1 }) + " t" : kg + " kg";
+}
+
+function aktualisiereAnsicht(zoomen) {
+  const zeilen = gefiltert();
+
+  // --- seskupení podle adresy ---
+  const orte = new Map();
+  const ohneKoord = [];
+  for (const z of zeilen) {
+    const k = geoKey(z);
+    const pos = geoCache[k];
+    if (!pos) { if (k in geoCache) ohneKoord.push(z); continue; }
+    if (!orte.has(k)) orte.set(k, { pos, zeilen: [] });
+    orte.get(k).zeilen.push(z);
+  }
+
+  // --- markery ---
+  markerGruppe.clearLayers();
+  const punkte = [];
+  for (const { pos, zeilen: zl } of orte.values()) {
+    const gesamt = zl.reduce((s, z) => s + z.menge, 0);
+    const sorten = [...new Set(zl.map(z => z.obst))];
+    const farbe = sorten.length === 1 ? farbeFuer(sorten[0]) : FARBE_GEMISCHT;
+    const erledigt = zl.every(z => z.geliefert === true);
+    const groesse = Math.max(34, Math.min(64, 26 + Math.sqrt(gesamt) * 1.1));
+    const icon = L.divIcon({
+      className: "marker-label",
+      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${farbe}">${erledigt ? "✓ " : ""}${markerText(gesamt)}</div>`,
+      iconSize: [groesse, groesse], iconAnchor: [groesse / 2, groesse / 2]
+    });
+    const m = L.marker([pos.lat, pos.lon], { icon }).addTo(markerGruppe);
+    m.bindPopup(popupHtml(zl, gesamt), { maxWidth: 340 });
+    punkte.push([pos.lat, pos.lon]);
+  }
+  if (zoomen && punkte.length) karte.fitBounds(punkte, { padding: [50, 50], maxZoom: 12, animate: false });
+
+  // --- součty ---
+  const summen = {};
+  for (const z of zeilen) {
+    if (!summen[z.obst]) summen[z.obst] = { kg: 0, eur: 0 };
+    summen[z.obst].kg += z.menge;
+    summen[z.obst].eur += z.summe || 0;
+  }
+  const tabelle = document.getElementById("summen");
+  tabelle.innerHTML = "";
+  let gKg = 0, gEur = 0;
+  const hatEur = zeilen.some(z => z.summe);
+  for (const [obst, s] of Object.entries(summen).sort()) {
+    gKg += s.kg; gEur += s.eur;
+    tabelle.insertAdjacentHTML("beforeend",
+      `<tr><td><span class="punkt" style="background:${farbeFuer(obst)};margin-right:6px;vertical-align:-1px"></span>${esc(obst)}</td><td class="z">${fmtKg(s.kg)}</td>${hatEur ? `<td class="z">${fmtEur(s.eur)}</td>` : ""}</tr>`);
+  }
+  tabelle.insertAdjacentHTML("beforeend",
+    `<tr style="border-top:1px solid #b9c5a5"><td><b>Celkem · ${zastavky(orte.size)}</b></td><td class="z">${fmtKg(gKg)}</td>${hatEur ? `<td class="z">${fmtEur(gEur)}</td>` : ""}</tr>`);
+
+  // --- seznam zastávek ---
+  const liste = document.getElementById("stopps");
+  liste.innerHTML = orte.size ? "" : (alleZeilen.length ? "Ve výběru nic není." : "–");
+  const sortiert = [...orte.values()].sort((a, b) => {
+    const da = a.zeilen[0].datum ? a.zeilen[0].datum.getTime() : 9e15;
+    const db = b.zeilen[0].datum ? b.zeilen[0].datum.getTime() : 9e15;
+    return da - db || b.zeilen.reduce((s, z) => s + z.menge, 0) - a.zeilen.reduce((s, z) => s + z.menge, 0);
+  });
+  for (const o of sortiert) {
+    const z0 = o.zeilen[0];
+    const kg = o.zeilen.reduce((s, z) => s + z.menge, 0);
+    const eur = o.zeilen.reduce((s, z) => s + (z.summe || 0), 0);
+    const erledigt = o.zeilen.every(z => z.geliefert === true);
+    const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
+    const d = document.createElement("div");
+    d.className = "stopp" + (erledigt ? " erledigt" : "");
+    d.innerHTML = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc(o.zeilen.map(z => z.kunde).filter(Boolean).join(" / ") || adr)}</b>` +
+      `<span class="grau">${esc(adr)}</span>` +
+      `<span class="grau"> · ${kg ? fmtKg(kg) : "množství zatím neznámé"}${eur ? " · " + fmtEur(eur) : ""}</span>`;
+    d.onclick = () => { karte.setView([o.pos.lat, o.pos.lon], 13); };
+    liste.appendChild(d);
+  }
+
+  // --- nenalezené adresy ---
+  const fb = document.getElementById("fehlerBlock");
+  const uniq = [...new Map(ohneKoord.map(z => [geoKey(z), z])).values()];
+  if (uniq.length && !geocodeLaeuft) {
+    fb.style.display = "";
+    document.getElementById("fehler").innerHTML = uniq.map(z =>
+      `• ${esc(z.kunde)}: „${esc([z.adresse, z.plz, z.ort].filter(Boolean).join(", "))}" – zkontrolujte prosím zápis v Excelu`).join("<br>");
+  } else fb.style.display = "none";
+}
+
+function popupHtml(zl, gesamt) {
+  const z0 = zl[0];
+  const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
+  const einKunde = new Set(zl.map(z => z.kunde)).size === 1;
+  const sortiert = [...zl].sort((a, b) => (a.datum?.getTime() || 0) - (b.datum?.getTime() || 0));
+  const gesEur = zl.reduce((s, z) => s + (z.summe || 0), 0);
+  let html = `<div class="popup-lief"><h3>${esc(einKunde ? (z0.kunde || adr) : adr)}</h3>`;
+  html += `<div style="color:#555;margin-bottom:6px">${esc(adr)}</div><table>`;
+  for (const z of sortiert) {
+    const statusZelle = z.geliefert === undefined ? "" :
+      (z.geliefert ? '<span class="haken">✓</span>' : '<span class="offen-punkt">●</span>');
+    html += `<tr>`;
+    if (statusZelle) html += `<td>${statusZelle}</td>`;
+    if (!einKunde) html += `<td>${esc(z.kunde)}</td>`;
+    if (z.datum) html += `<td>${esc(fmtDatum(z.datum))}</td>`;
+    html += `<td><span class="punkt" style="background:${farbeFuer(z.obst)};margin-right:4px;vertical-align:-1px"></span>${esc(z.obst)}</td>`;
+    html += `<td style="text-align:right">${z.menge ? fmtKg(z.menge) : "?"}</td>`;
+    html += `<td style="text-align:right">${z.summe ? fmtEur(z.summe) : ""}</td></tr>`;
+    if (z.notiz) html += `<tr><td colspan="6" style="color:#777;font-style:italic;padding-left:18px">📝 ${esc(z.notiz)}</td></tr>`;
+  }
+  if (zl.length > 1) html += `<tr class="sum"><td colspan="4">Celkem</td><td style="text-align:right">${fmtKg(gesamt)}</td><td style="text-align:right">${gesEur ? fmtEur(gesEur) : ""}</td></tr>`;
+  html += `</table></div>`;
+  return html;
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function setStatus(t) { document.getElementById("status").textContent = t; }
+
+// ---------- Ovládací prvky ----------
+document.getElementById("btnDatei").onclick = dateiWaehlen;
+document.querySelectorAll("#statusKnoepfe button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll("#statusKnoepfe button").forEach(x => x.classList.remove("aktiv"));
+    b.classList.add("aktiv");
+    statusModus = b.dataset.s;
+    aktualisiereAnsicht(true);
+  };
+});
+document.querySelectorAll("#zeitKnoepfe button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll("#zeitKnoepfe button").forEach(x => x.classList.remove("aktiv"));
+    b.classList.add("aktiv");
+    zeitModus = b.dataset.z;
+    document.getElementById("von").value = "";
+    document.getElementById("bis").value = "";
+    aktualisiereAnsicht(true);
+  };
+});
+document.getElementById("von").onchange = () => aktualisiereAnsicht(true);
+document.getElementById("bis").onchange = () => aktualisiereAnsicht(true);
+
+// testovací/ladicí rozhraní
+window.__ladeZeilen = (zeilen) => datenUebernehmen(zeilen.map(z => ({ ...z, datum: z.datum ? new Date(z.datum) : null })));
+
+initKarte();
+handleWiederherstellen();
+</script>
+</body>
+</html>
