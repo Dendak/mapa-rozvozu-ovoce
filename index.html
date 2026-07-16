@@ -186,6 +186,22 @@ function putz(s) {
   return String(s ?? "").replace(/ /g, " ").replace(/\s+/g, " ").replace(/^[,\s]+|[,\s.]+$/g, "").trim();
 }
 
+// GPS souřadnice v adrese nebo poznámce (např. "47.7264661, 13.4350206" z Google Maps)
+// mají přednost před vyhledáváním adresy. Z textu se po načtení odstraní.
+function extrahujKoord(z) {
+  const re = /(-?\d{1,3}\.\d{3,})\s*[,;]\s*(-?\d{1,3}\.\d{3,})/;
+  for (const feld of ["adresse", "notiz"]) {
+    const m = String(z[feld] || "").match(re);
+    if (!m) continue;
+    const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+    if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      z.koord = { lat, lon };
+      z[feld] = putz(String(z[feld]).replace(m[0], " ").replace(/\(\s*\)/, " "));
+      return;
+    }
+  }
+}
+
 function parseWorkbook(buf) {
   const wb = XLSX.read(buf, { type: "array", cellDates: true });
   const zeilen = [];
@@ -231,6 +247,7 @@ function parseVorlage(arr, kopf, zeilen) {
       geliefert: idx.geliefert != null ? istWahr(row[idx.geliefert]) : undefined,
     };
     if (!z.kunde && !z.ort && !z.adresse) continue;
+    extrahujKoord(z);
     zeilen.push(z);
   }
 }
@@ -247,7 +264,7 @@ function parseObstListe(arr, blattName, obstStart, zeilen) {
     // Řádek s nadpisem: druh ovoce ve sloupci B, bez množství a adresy
     if (name && !adresse && !hatMenge && (r === 0 || OBST_MUSTER.test(name))) { obst = name; continue; }
     if (!name && !adresse) continue; // prázdný nebo součtový řádek
-    zeilen.push({
+    const z = {
       datum: null,
       kunde: name, adresse, plz: "", ort: "",
       obst: obst || "Ovoce",
@@ -256,7 +273,9 @@ function parseObstListe(arr, blattName, obstStart, zeilen) {
       summe: parseMenge(row[4]) || null,
       notiz: putz(row[6]),
       geliefert: istWahr(row[0]),
-    });
+    };
+    extrahujKoord(z);
+    zeilen.push(z);
   }
 }
 
@@ -435,6 +454,22 @@ function sucheVarianten(z) {
 }
 
 async function geokodieren(zeilen) {
+  // řádky s vlastními GPS souřadnicemi: vždy přepsat cache (opravují špatné hledání)
+  let koordNove = false;
+  for (const z of zeilen) {
+    if (!z.koord) continue;
+    const k = geoKey(z);
+    const stara = geoCache[k];
+    if (!stara || stara.lat !== z.koord.lat || stara.lon !== z.koord.lon) {
+      geoCache[k] = { lat: z.koord.lat, lon: z.koord.lon };
+      koordNove = true;
+    }
+  }
+  if (koordNove) {
+    localStorage.setItem("geoCache", JSON.stringify(geoCache));
+    aktualisiereAnsicht(true);
+  }
+
   const offen = [];
   const gesehen = new Set();
   for (const z of zeilen) {

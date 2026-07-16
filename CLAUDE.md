@@ -33,6 +33,8 @@ Bez hlavičky sloupců; list `Tabelle1`:
 
 - Řádek, kde je v B název ovoce a chybí množství i adresa = nadpis bloku (druh ovoce).
 - Součtové a prázdné řádky se přeskakují (bez jména a adresy).
+- GPS souřadnice v adrese nebo poznámce (formát Google, např. `(47.7264661, 13.4350206)`)
+  mají přednost před geokódováním a přepíší i starou cache — řeší špatně nalezené adresy.
 - Parser podporuje i formát B (pojmenované sloupce Datum/Kunde/Adresse/PLZ/Ort/Obst/Menge/Notiz).
 
 ## Zásady
