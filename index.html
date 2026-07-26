@@ -429,6 +429,27 @@ async function handleWiederherstellen() {
   } catch (e) { /* tak klasický dialog */ }
 }
 
+// ---------- Kurz EUR/CZK ----------
+let kurzCZK = null, kurzZdroj = "";
+async function nactiKurz() {
+  try { // oficiální denní kurz ČNB
+    const r = await fetch("https://api.cnb.cz/cnbapi/exrates/daily?lang=EN");
+    if (r.ok) {
+      const j = await r.json();
+      const eur = (j.rates || []).find(x => x.currencyCode === "EUR");
+      if (eur && eur.rate) { kurzCZK = eur.rate / (eur.amount || 1); kurzZdroj = "ČNB"; aktualisiereAnsicht(); return; }
+    }
+  } catch (e) { /* zkusíme zálohu */ }
+  try { // záloha: kurz ECB (frankfurter.app)
+    const r = await fetch("https://api.frankfurter.app/latest?from=EUR&to=CZK");
+    if (r.ok) {
+      const j = await r.json();
+      if (j.rates && j.rates.CZK) { kurzCZK = j.rates.CZK; kurzZdroj = "ECB"; aktualisiereAnsicht(); }
+    }
+  } catch (e) { /* bez kurzu se jen nezobrazí Kč */ }
+}
+setInterval(nactiKurz, 6 * 3600 * 1000); // obnovit kurz každých 6 hodin
+
 // ---------- Geokódování (Nominatim / OpenStreetMap) ----------
 const geoCache = JSON.parse(localStorage.getItem("geoCache") || "{}");
 
@@ -643,6 +664,10 @@ function aktualisiereAnsicht(zoomen) {
   }
   tabelle.insertAdjacentHTML("beforeend",
     `<tr style="border-top:1px solid #b9c5a5"><td><b>Celkem · ${zastavky(orte.size)}</b></td><td class="z">${fmtKg(gKg)}</td>${hatEur ? `<td class="z">${fmtEur(gEur)}</td>` : ""}</tr>`);
+  if (hatEur && kurzCZK && gEur) {
+    tabelle.insertAdjacentHTML("beforeend",
+      `<tr><td colspan="3" style="text-align:right;color:#555;font-size:12.5px;padding-top:2px">≈ <b>${Math.round(gEur * kurzCZK).toLocaleString("cs-CZ")} Kč</b> <span style="color:#999">(${kurzCZK.toLocaleString("cs-CZ", { maximumFractionDigits: 3 })} Kč/€ · ${kurzZdroj})</span></td></tr>`);
+  }
 
   // --- seznam zastávek ---
   const liste = document.getElementById("stopps");
@@ -737,6 +762,7 @@ window.__ladeZeilen = (zeilen) => datenUebernehmen(zeilen.map(z => ({ ...z, datu
 initKarte();
 handleWiederherstellen();
 webLaden(true);
+nactiKurz();
 </script>
 </body>
 </html>
