@@ -47,7 +47,8 @@
   .stopp:hover { background: #e8eedb; border-color: #cdd8b8; }
   .stopp b { display: block; }
   .stopp .grau { color: #666; }
-  .stopp.erledigt { opacity: .55; }
+  .stopp.erledigt { background: #e6f4ea; border-color: #b7dfc0; }
+  .stopp.erledigt:hover { background: #d8eedf; }
   #fehler { color: #a33; font-size: 12.5px; line-height: 1.5; }
   #ladehinweis {
     position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1200;
@@ -61,7 +62,7 @@
     border: 2.5px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4);
     white-space: nowrap;
   }
-  .marker-kreis.erledigt { opacity: .5; }
+  .marker-kreis.erledigt { opacity: .92; }
   .popup-lief { font-size: 13px; }
   .popup-lief h3 { margin: 0 0 6px; font-size: 15px; }
   .popup-lief table { border-collapse: collapse; }
@@ -611,10 +612,11 @@ function aktualisiereAnsicht(zoomen) {
     const sorten = [...new Set(zl.map(z => z.obst))];
     const farbe = sorten.length === 1 ? farbeFuer(sorten[0]) : FARBE_GEMISCHT;
     const erledigt = zl.every(z => z.geliefert === true);
+    const markerFarbe = erledigt ? "#2e7d32" : farbe; // doručené zastávky zeleně
     const groesse = Math.max(34, Math.min(64, 26 + Math.sqrt(gesamt) * 1.1));
     const icon = L.divIcon({
       className: "marker-label",
-      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${farbe}">${erledigt ? "✓ " : ""}${markerText(gesamt)}</div>`,
+      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${markerFarbe}">${erledigt ? "✓ " : ""}${markerText(gesamt)}</div>`,
       iconSize: [groesse, groesse], iconAnchor: [groesse / 2, groesse / 2]
     });
     const m = L.marker([pos.lat, pos.lon], { icon }).addTo(markerGruppe);
