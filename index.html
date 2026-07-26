@@ -432,19 +432,18 @@ async function handleWiederherstellen() {
 // ---------- Kurz EUR/CZK ----------
 let kurzCZK = null, kurzZdroj = "";
 async function nactiKurz() {
-  try { // oficiální denní kurz ČNB
-    const r = await fetch("https://api.cnb.cz/cnbapi/exrates/daily?lang=EN");
+  try { // denní kurz ECB (frankfurter.dev, povoluje CORS)
+    const r = await fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=CZK");
     if (r.ok) {
       const j = await r.json();
-      const eur = (j.rates || []).find(x => x.currencyCode === "EUR");
-      if (eur && eur.rate) { kurzCZK = eur.rate / (eur.amount || 1); kurzZdroj = "ČNB"; aktualisiereAnsicht(); return; }
+      if (j.rates && j.rates.CZK) { kurzCZK = j.rates.CZK; kurzZdroj = "ECB"; aktualisiereAnsicht(); return; }
     }
   } catch (e) { /* zkusíme zálohu */ }
-  try { // záloha: kurz ECB (frankfurter.app)
-    const r = await fetch("https://api.frankfurter.app/latest?from=EUR&to=CZK");
+  try { // záloha: open.er-api.com
+    const r = await fetch("https://open.er-api.com/v6/latest/EUR");
     if (r.ok) {
       const j = await r.json();
-      if (j.rates && j.rates.CZK) { kurzCZK = j.rates.CZK; kurzZdroj = "ECB"; aktualisiereAnsicht(); }
+      if (j.rates && j.rates.CZK) { kurzCZK = j.rates.CZK; kurzZdroj = "ER-API"; aktualisiereAnsicht(); }
     }
   } catch (e) { /* bez kurzu se jen nezobrazí Kč */ }
 }
