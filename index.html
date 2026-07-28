@@ -54,6 +54,17 @@
   .stopp-inhalt { flex: 1; }
   .stopp.im-plan { background: #e7effa; border-color: #b9cdea; }
   .stopp.im-plan:hover { background: #dbe7f7; }
+  .plan-nr {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; background: #2b6cb0; color: #fff;
+    font-size: 12px; font-weight: 700; flex: none;
+  }
+  .plan-ctrl { display: flex; flex-direction: column; gap: 2px; align-items: center; flex: none; }
+  .plan-ctrl button {
+    border: 1px solid #b9c5a5; background: #fff; border-radius: 4px; cursor: pointer;
+    font-size: 9px; padding: 1px 5px; line-height: 1.3; color: #333;
+  }
+  .plan-ctrl button:hover { background: #e8eedb; }
   #fehler { color: #a33; font-size: 12.5px; line-height: 1.5; }
   #ladehinweis {
     position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1200;
@@ -127,6 +138,7 @@
     <div class="block">
       <h2 id="summenTitel">Součty (výběr)</h2>
       <table class="summen" id="summen"></table>
+      <div id="routeInfo" style="font-size:13px;margin-top:6px"></div>
     </div>
 
     <div class="block">
@@ -167,7 +179,7 @@ function farbeFuer(obst) {
 const FARBE_GEMISCHT = "#555555";
 const OBST_MUSTER = /^(weichsel|zwetschk|birne|apfel|äpfel|kirsch|marille|aprikose|pflaume|erdbeer|himbeer|nuss|walnuss|obst|višn|visn|třešn|tresn|švestk|svestk|hrušk|hrusk|jablk|meruňk|merunk|jahod|malin|ořech|orech|ovoce)/i;
 
-let karte, markerGruppe;
+let karte, markerGruppe, routeGruppe;
 let alleZeilen = [];
 let dateiHandle = null;
 let letzteAenderung = 0;
@@ -175,8 +187,19 @@ let leseFehler = 0;
 let obstAuswahl = new Set();
 let zeitModus = "alle";
 let statusModus = "offen";
-// Plánovač: klíče (geoKey) zaškrtnutých zastávek, přežije obnovení stránky
-let planAuswahl = new Set(JSON.parse(localStorage.getItem("planAuswahl") || "[]"));
+// Plánovač: klíče (geoKey) zaškrtnutých zastávek v pořadí rozvozu, přežije obnovení stránky
+let planAuswahl = JSON.parse(localStorage.getItem("planAuswahl") || "[]");
+let planZurueck = localStorage.getItem("planZurueck") === "1";
+let letzteOrte = new Map();
+function planSpeichern() { localStorage.setItem("planAuswahl", JSON.stringify(planAuswahl)); }
+function planVerschieben(key, dir) {
+  const i = planAuswahl.indexOf(key);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= planAuswahl.length) return;
+  [planAuswahl[i], planAuswahl[j]] = [planAuswahl[j], planAuswahl[i]];
+  planSpeichern();
+  aktualisiereAnsicht(false);
+}
 let geocodeLaeuft = false;
 
 // ---------- Mapa ----------
@@ -186,6 +209,7 @@ function initKarte() {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(karte);
+  routeGruppe = L.layerGroup().addTo(karte);
   markerGruppe = L.layerGroup().addTo(karte);
 }
 
@@ -540,6 +564,95 @@ async function nominatim(anfrage, cc) {
   } catch (e) { return null; }
 }
 
+// ---------- Trasa plánovače (OSRM) ----------
+const START_ADRESSE = "Krtely 70, Malovice, Česko"; // odjezd s ovocem
+let startPos = JSON.parse(localStorage.getItem("startPos") || "null");
+let routeTimer = null, routeSig = "", letzteRoute = null;
+
+function fmtKm(m) { return (m / 1000).toLocaleString("cs-CZ", { maximumFractionDigits: 0 }) + " km"; }
+function fmtDauer(s) {
+  const min = Math.round(s / 60);
+  return min >= 60 ? Math.floor(min / 60) + " h " + (min % 60) + " min" : min + " min";
+}
+
+async function startSuchen() {
+  if (startPos) return startPos;
+  startPos = await nominatim(START_ADRESSE, "cz");
+  if (startPos) localStorage.setItem("startPos", JSON.stringify(startPos));
+  return startPos;
+}
+
+function routeAktualisieren(ziele) {
+  clearTimeout(routeTimer);
+  routeTimer = setTimeout(() => routeLaden(ziele), 400);
+}
+
+// součet + dojezdy po úsecích vypsat do stránky (řádky mají data-leg=index)
+function routeAnzeigen() {
+  if (!letzteRoute) return;
+  document.getElementById("routeInfo").innerHTML =
+    `🚗 Trasa: <b>${fmtKm(letzteRoute.distance)}</b> · <b>${fmtDauer(letzteRoute.duration)}</b>` +
+    `<span style="color:#999"> · z Krtel${planZurueck ? " a zpět" : ""}, čistá jízda</span>`;
+  letzteRoute.legs.forEach((leg, i) => {
+    const el = document.querySelector(`[data-leg="${i}"]`);
+    if (el) el.textContent = `⤷ dojezd ${fmtKm(leg.distance)} · ${fmtDauer(leg.duration)}`;
+  });
+}
+
+async function routeLaden(ziele) {
+  const info = document.getElementById("routeInfo");
+  if (!ziele.length) { routeGruppe.clearLayers(); info.innerHTML = ""; routeSig = ""; letzteRoute = null; return; }
+  if (!(await startSuchen())) { info.textContent = "Výchozí bod (Krtely) se nepodařilo najít."; return; }
+  const punkte = [startPos, ...ziele];
+  if (planZurueck) punkte.push(startPos);
+  const sig = JSON.stringify(punkte);
+  if (sig === routeSig) { routeAnzeigen(); return; }
+  info.textContent = "Počítám trasu …";
+  try {
+    const url = "https://router.project-osrm.org/route/v1/driving/" +
+      punkte.map(p => p.lon + "," + p.lat).join(";") + "?overview=full&geometries=geojson";
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.code !== "Ok" || !j.routes || !j.routes.length) throw new Error(j.code);
+    routeSig = sig;
+    letzteRoute = j.routes[0];
+    routeGruppe.clearLayers();
+    L.geoJSON(letzteRoute.geometry, { style: { color: "#2b6cb0", weight: 4, opacity: .75 } }).addTo(routeGruppe);
+    L.circleMarker([startPos.lat, startPos.lon], { radius: 7, color: "#2b6cb0", fillColor: "#fff", fillOpacity: 1, weight: 3 })
+      .bindPopup("Start: Krtely 70").addTo(routeGruppe);
+    routeAnzeigen();
+  } catch (e) {
+    info.textContent = "Trasu se nepodařilo spočítat (routovací server je nedostupný).";
+  }
+}
+
+// Nejkratší pořadí zastávek (OSRM „trip", start v Krtelích)
+async function planOptimieren() {
+  const keys = planAuswahl.filter(k => letzteOrte.has(k));
+  const info = document.getElementById("routeInfo");
+  if (keys.length < 2) return;
+  if (!(await startSuchen())) { info.textContent = "Výchozí bod (Krtely) se nepodařilo najít."; return; }
+  info.textContent = "Hledám nejkratší pořadí …";
+  try {
+    const punkte = [startPos, ...keys.map(k => letzteOrte.get(k).pos)];
+    const url = "https://router.project-osrm.org/trip/v1/driving/" +
+      punkte.map(p => p.lon + "," + p.lat).join(";") +
+      "?source=first&roundtrip=" + (planZurueck ? "true" : "false") + "&overview=false";
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.code !== "Ok" || !j.waypoints) throw new Error(j.code);
+    planAuswahl = j.waypoints.slice(1)
+      .map((w, i) => ({ poradi: w.waypoint_index, key: keys[i] }))
+      .sort((a, b) => a.poradi - b.poradi)
+      .map(x => x.key);
+    planSpeichern();
+    routeSig = "";
+    aktualisiereAnsicht(false);
+  } catch (e) {
+    info.textContent = "Nejkratší pořadí se nepodařilo spočítat.";
+  }
+}
+
 // ---------- Převzetí dat a zobrazení ----------
 function datenUebernehmen(zeilen) {
   alleZeilen = zeilen;
@@ -632,15 +745,19 @@ function aktualisiereAnsicht(zoomen) {
     orte.get(k).zeilen.push(z);
   }
 
-  // Plánovač: na mapě a v součtech jsou jen zaškrtnuté zastávky
+  // Plánovač: na mapě a v součtech jsou jen zaškrtnuté zastávky, v pořadí rozvozu
   const planModus = statusModus === "plan";
-  const anzeigen = planModus ? new Map([...orte].filter(([k]) => planAuswahl.has(k))) : orte;
+  const planKeys = planModus ? planAuswahl.filter(k => orte.has(k)) : [];
+  const anzeigen = planModus ? new Map(planKeys.map(k => [k, orte.get(k)])) : orte;
+  letzteOrte = orte;
   document.getElementById("summenTitel").textContent = planModus ? "Součty (plán)" : "Součty (výběr)";
 
   // --- markery ---
   markerGruppe.clearLayers();
   const punkte = [];
+  let planNr = 0;
   for (const { pos, zeilen: zl } of anzeigen.values()) {
+    planNr++;
     const gesamt = zl.reduce((s, z) => s + z.menge, 0);
     const sorten = [...new Set(zl.map(z => z.obst))];
     const farbe = sorten.length === 1 ? farbeFuer(sorten[0]) : FARBE_GEMISCHT;
@@ -649,7 +766,7 @@ function aktualisiereAnsicht(zoomen) {
     const groesse = Math.max(34, Math.min(64, 26 + Math.sqrt(gesamt) * 1.1));
     const icon = L.divIcon({
       className: "marker-label",
-      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${markerFarbe}">${erledigt ? "✓ " : ""}${markerText(gesamt)}</div>`,
+      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${markerFarbe}">${planModus ? planNr + ". " : ""}${erledigt ? "✓ " : ""}${markerText(gesamt)}</div>`,
       iconSize: [groesse, groesse], iconAnchor: [groesse / 2, groesse / 2]
     });
     const m = L.marker([pos.lat, pos.lon], { icon }).addTo(markerGruppe);
@@ -657,6 +774,10 @@ function aktualisiereAnsicht(zoomen) {
     punkte.push([pos.lat, pos.lon]);
   }
   if (zoomen && punkte.length) karte.fitBounds(punkte, { padding: [50, 50], maxZoom: 12, animate: false });
+
+  // --- trasa plánovače ---
+  if (planModus) routeAktualisieren(planKeys.map(k => orte.get(k).pos));
+  else if (routeGruppe) { routeGruppe.clearLayers(); document.getElementById("routeInfo").innerHTML = ""; routeSig = ""; letzteRoute = null; }
 
   // --- součty ---
   const summen = {};
@@ -687,18 +808,29 @@ function aktualisiereAnsicht(zoomen) {
   liste.innerHTML = orte.size ? "" : (alleZeilen.length ? "Ve výběru nic není." : "–");
   if (planModus && orte.size) {
     const info = document.createElement("div");
-    info.style.cssText = "font-size:12.5px;color:#555;margin-bottom:6px;line-height:1.4";
+    info.style.cssText = "font-size:12.5px;color:#555;margin-bottom:6px;line-height:1.7";
     if (anzeigen.size) {
-      info.innerHTML = `Naplánováno: <b>${zastavky(anzeigen.size)}</b> · <a href="#" id="planLeeren" style="color:var(--gruen)">zrušit výběr</a>`;
+      info.innerHTML = `Naplánováno: <b>${zastavky(anzeigen.size)}</b> · <a href="#" id="planLeeren" style="color:var(--gruen)">zrušit výběr</a>` +
+        (anzeigen.size >= 2 ? ` · <a href="#" id="planSortieren" style="color:var(--gruen)">🔀 nejkratší pořadí</a>` : "") +
+        `<br><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planRueck"${planZurueck ? " checked" : ""}> s návratem do Krtel</label>`;
     } else {
-      info.textContent = "Zaškrtněte zastávky, které chcete vzít na cestu – mapa a součty ukážou jen ty.";
+      info.textContent = "Zaškrtněte zastávky, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Šipkami pak změníte pořadí.";
     }
     liste.appendChild(info);
     const a = info.querySelector("#planLeeren");
     if (a) a.onclick = (ev) => {
       ev.preventDefault();
-      planAuswahl.clear();
-      localStorage.setItem("planAuswahl", "[]");
+      planAuswahl = [];
+      planSpeichern();
+      aktualisiereAnsicht(false);
+    };
+    const so = info.querySelector("#planSortieren");
+    if (so) so.onclick = (ev) => { ev.preventDefault(); planOptimieren(); };
+    const rb = info.querySelector("#planRueck");
+    if (rb) rb.onchange = () => {
+      planZurueck = rb.checked;
+      localStorage.setItem("planZurueck", planZurueck ? "1" : "");
+      routeSig = "";
       aktualisiereAnsicht(false);
     };
   }
@@ -707,6 +839,10 @@ function aktualisiereAnsicht(zoomen) {
     const db = b.zeilen[0].datum ? b.zeilen[0].datum.getTime() : 9e15;
     return da - db || b.zeilen.reduce((s, z) => s + z.menge, 0) - a.zeilen.reduce((s, z) => s + z.menge, 0);
   });
+  if (planModus) { // zaškrtnuté nahoru, v pořadí rozvozu
+    const rang = new Map(planKeys.map((k, i) => [k, i]));
+    sortiert.sort((a, b) => (rang.has(a.key) ? rang.get(a.key) : 9e9) - (rang.has(b.key) ? rang.get(b.key) : 9e9));
+  }
   for (const o of sortiert) {
     const z0 = o.zeilen[0];
     const kg = o.zeilen.reduce((s, z) => s + z.menge, 0);
@@ -714,7 +850,7 @@ function aktualisiereAnsicht(zoomen) {
     const erledigt = o.zeilen.every(z => z.geliefert === true);
     const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
     const d = document.createElement("div");
-    const imPlan = planAuswahl.has(o.key);
+    const imPlan = planKeys.includes(o.key);
     d.className = "stopp" + (erledigt ? " erledigt" : "") + (planModus ? " mit-cb" + (imPlan ? " im-plan" : "") : "");
     const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc(o.zeilen.map(z => z.kunde).filter(Boolean).join(" / ") || adr)}</b>` +
       `<span class="grau">${esc(adr)}</span>` +
@@ -725,15 +861,32 @@ function aktualisiereAnsicht(zoomen) {
       cb.checked = imPlan;
       cb.onclick = (ev) => ev.stopPropagation();
       cb.onchange = () => {
-        if (cb.checked) planAuswahl.add(o.key); else planAuswahl.delete(o.key);
-        localStorage.setItem("planAuswahl", JSON.stringify([...planAuswahl]));
+        if (cb.checked) planAuswahl.push(o.key);
+        else planAuswahl = planAuswahl.filter(k => k !== o.key);
+        planSpeichern();
         aktualisiereAnsicht(false);
       };
       const w = document.createElement("div");
       w.className = "stopp-inhalt";
-      w.innerHTML = inhalt;
+      w.innerHTML = inhalt + (imPlan ? `<span class="grau" style="display:block" data-leg="${planKeys.indexOf(o.key)}"></span>` : "");
       d.appendChild(cb);
       d.appendChild(w);
+      if (imPlan) {
+        const ctr = document.createElement("div");
+        ctr.className = "plan-ctrl";
+        const nr = document.createElement("span");
+        nr.className = "plan-nr";
+        nr.textContent = planKeys.indexOf(o.key) + 1;
+        ctr.appendChild(nr);
+        for (const [txt, dir] of [["▲", -1], ["▼", 1]]) {
+          const b = document.createElement("button");
+          b.textContent = txt;
+          b.title = "změnit pořadí";
+          b.onclick = (ev) => { ev.stopPropagation(); planVerschieben(o.key, dir); };
+          ctr.appendChild(b);
+        }
+        d.appendChild(ctr);
+      }
     } else {
       d.innerHTML = inhalt;
     }
