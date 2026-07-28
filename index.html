@@ -59,12 +59,13 @@
     width: 20px; height: 20px; border-radius: 50%; background: #2b6cb0; color: #fff;
     font-size: 12px; font-weight: 700; flex: none;
   }
-  .plan-ctrl { display: flex; flex-direction: column; gap: 2px; align-items: center; flex: none; }
-  .plan-ctrl button {
-    border: 1px solid #b9c5a5; background: #fff; border-radius: 4px; cursor: pointer;
-    font-size: 9px; padding: 1px 5px; line-height: 1.3; color: #333;
+  .plan-ctrl { display: flex; flex-direction: column; gap: 4px; align-items: center; flex: none; }
+  .plan-griff {
+    cursor: grab; touch-action: none; user-select: none; color: #7d8a6a;
+    font-size: 17px; line-height: 1; padding: 2px 4px;
   }
-  .plan-ctrl button:hover { background: #e8eedb; }
+  .plan-griff:active { cursor: grabbing; }
+  .stopp.dragging { opacity: .65; border: 1px dashed #2b6cb0; background: #dbe7f7; }
   #fehler { color: #a33; font-size: 12.5px; line-height: 1.5; }
   #ladehinweis {
     position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1200;
@@ -83,6 +84,11 @@
     display: flex; align-items: center; justify-content: center;
     background: #2b6cb0; color: #fff; border: 2px solid #fff; border-radius: 50%;
     font-size: 11px; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  }
+  .pause-marke {
+    background: #e8930c; color: #fff; border: 2px solid #fff; border-radius: 12px;
+    padding: 2px 7px; font-size: 11px; font-weight: 700; white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,.35); width: max-content;
   }
   .marker-kreis.erledigt { opacity: .92; }
   .popup-lief { font-size: 13px; }
@@ -198,13 +204,42 @@ let planAuswahl = JSON.parse(localStorage.getItem("planAuswahl") || "[]");
 let planZurueck = localStorage.getItem("planZurueck") !== "0"; // návrat do Krtel: výchozí zapnuto
 let letzteOrte = new Map();
 function planSpeichern() { localStorage.setItem("planAuswahl", JSON.stringify(planAuswahl)); }
-function planVerschieben(key, dir) {
-  const i = planAuswahl.indexOf(key);
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= planAuswahl.length) return;
-  [planAuswahl[i], planAuswahl[j]] = [planAuswahl[j], planAuswahl[i]];
-  planSpeichern();
-  aktualisiereAnsicht(false);
+// Přetažení karty za úchyt ⠿ mění pořadí zastávek (myš i dotyk)
+function planZiehen(ev, row) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  const liste = document.getElementById("stopps");
+  const sidebar = document.getElementById("sidebar");
+  row.classList.add("dragging");
+  // posluchače na document: přesun karty v DOM by zrušil pointer capture na úchytu
+  const move = (e) => {
+    const rows = [...liste.querySelectorAll(".stopp.im-plan")].filter(r => r !== row);
+    let vor = null;
+    for (const r of rows) {
+      const rect = r.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) { vor = r; break; }
+    }
+    if (vor) liste.insertBefore(row, vor);
+    else if (rows.length) rows[rows.length - 1].after(row);
+    // automatické rolování u okrajů panelu
+    const sr = sidebar.getBoundingClientRect();
+    if (e.clientY < sr.top + 50) sidebar.scrollTop -= 8;
+    else if (e.clientY > sr.bottom - 50) sidebar.scrollTop += 8;
+  };
+  const up = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", up);
+    document.removeEventListener("pointercancel", up);
+    row.classList.remove("dragging");
+    const keys = [...liste.querySelectorAll(".stopp.im-plan")].map(r => r.dataset.key);
+    planAuswahl = keys.concat(planAuswahl.filter(k => !keys.includes(k)));
+    planSpeichern();
+    routeSig = "";
+    aktualisiereAnsicht(false);
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up);
+  document.addEventListener("pointercancel", up);
 }
 let geocodeLaeuft = false;
 
@@ -572,6 +607,10 @@ async function nominatim(anfrage, cc) {
 
 // ---------- Trasa plánovače (OSRM) ----------
 const START_ADRESSE = "Krtely 70, Malovice, Česko"; // odjezd s ovocem
+// průjezdní bod Wullowitz: vynutí koridor přes Freistadt (S10) místo Bad Leonfelden
+const VIA_FREISTADT = { lat: 48.611, lon: 14.463 };
+const PAUSE_SEK = 4.5 * 3600; // povinná přestávka po 4:30 čisté jízdy
+let planFreistadt = localStorage.getItem("planFreistadt") !== "0";
 let startPos = JSON.parse(localStorage.getItem("startPos") || "null");
 let routeTimer = null, routeSig = "", letzteRoute = null;
 
@@ -596,10 +635,12 @@ function routeAktualisieren(ziele) {
 // součet + dojezdy po úsecích vypsat do stránky (řádky mají data-leg=index)
 function routeAnzeigen() {
   if (!letzteRoute) return;
+  const pausen = letzteRoute.pausenAnzahl ?? Math.floor(letzteRoute.duration / PAUSE_SEK);
   document.getElementById("routeInfo").innerHTML =
     `🚗 Trasa: <b>${fmtKm(letzteRoute.distance)}</b> · <b>${fmtDauer(letzteRoute.duration)}</b>` +
-    `<span style="color:#999"> · z Krtel${planZurueck ? " a zpět" : ""}, čistá jízda</span>`;
-  letzteRoute.legs.forEach((leg, i) => {
+    (pausen ? ` + ${pausen}× pauza 45 min` : "") +
+    `<span style="color:#999"> · z Krtel${planZurueck ? " a zpět" : ""}${planFreistadt ? ", přes Freistadt" : ""}</span>`;
+  (letzteRoute.stopLegs || letzteRoute.legs).forEach((leg, i) => {
     const el = document.querySelector(`[data-leg="${i}"]`);
     if (el) el.textContent = `⤷ dojezd ${fmtKm(leg.distance)} · ${fmtDauer(leg.duration)}`;
   });
@@ -609,27 +650,69 @@ async function routeLaden(ziele) {
   const info = document.getElementById("routeInfo");
   if (!ziele.length) { routeGruppe.clearLayers(); info.innerHTML = ""; routeSig = ""; letzteRoute = null; return; }
   if (!(await startSuchen())) { info.textContent = "Výchozí bod (Krtely) se nepodařilo najít."; return; }
-  const punkte = [startPos, ...ziele];
-  if (planZurueck) punkte.push(startPos);
+  // ziel=true jsou zastávky (a návrat domů), ziel=false průjezdní body
+  const punkte = [{ ...startPos, ziel: false }];
+  if (planFreistadt) punkte.push({ ...VIA_FREISTADT, ziel: false });
+  for (const z of ziele) punkte.push({ ...z, ziel: true });
+  if (planZurueck) {
+    if (planFreistadt) punkte.push({ ...VIA_FREISTADT, ziel: false });
+    punkte.push({ ...startPos, ziel: true });
+  }
   const sig = JSON.stringify(punkte);
   if (sig === routeSig) { routeAnzeigen(); return; }
   info.textContent = "Počítám trasu …";
   try {
     const url = "https://router.project-osrm.org/route/v1/driving/" +
-      punkte.map(p => p.lon + "," + p.lat).join(";") + "?overview=full&geometries=geojson";
+      punkte.map(p => p.lon + "," + p.lat).join(";") + "?overview=full&geometries=geojson&annotations=duration";
     const r = await fetch(url);
     const j = await r.json();
     if (j.code !== "Ok" || !j.routes || !j.routes.length) throw new Error(j.code);
     routeSig = sig;
     letzteRoute = j.routes[0];
+    // úseky přes průjezdní body sloučit, aby dojezdy odpovídaly zastávkám
+    const stopLegs = [];
+    let dist = 0, dur = 0;
+    letzteRoute.legs.forEach((leg, i) => {
+      dist += leg.distance; dur += leg.duration;
+      if (punkte[i + 1].ziel) { stopLegs.push({ distance: dist, duration: dur }); dist = 0; dur = 0; }
+    });
+    letzteRoute.stopLegs = stopLegs;
     routeGruppe.clearLayers();
     L.geoJSON(letzteRoute.geometry, { style: { color: "#2b6cb0", weight: 4, opacity: .75 } }).addTo(routeGruppe);
     L.circleMarker([startPos.lat, startPos.lon], { radius: 7, color: "#2b6cb0", fillColor: "#fff", fillOpacity: 1, weight: 3 })
       .bindPopup("Start: Krtely 70").addTo(routeGruppe);
+    pausenMarkieren();
     routeAnzeigen();
   } catch (e) {
     info.textContent = "Trasu se nepodařilo spočítat (routovací server je nedostupný).";
   }
+}
+
+// Kde budu po každých 4:30 čisté jízdy (povinná přestávka řidiče)
+function pausenMarkieren() {
+  const coords = letzteRoute.geometry.coordinates; // [lon, lat]
+  const segDur = letzteRoute.legs.flatMap(l => (l.annotation && l.annotation.duration) || []);
+  let t = 0, dalsi = PAUSE_SEK, nr = 1;
+  for (let j = 0; j < segDur.length && j + 1 < coords.length; j++) {
+    t += segDur[j];
+    while (t >= dalsi) {
+      const podil = segDur[j] ? 1 - (t - dalsi) / segDur[j] : 0;
+      const a = coords[j], b = coords[j + 1];
+      const lat = a[1] + (b[1] - a[1]) * podil;
+      const lon = a[0] + (b[0] - a[0]) * podil;
+      const min = nr * 270;
+      const icon = L.divIcon({
+        className: "marker-label",
+        html: `<div class="pause-marke">☕ ${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}</div>`,
+        iconSize: [0, 0], iconAnchor: [24, 11]
+      });
+      L.marker([lat, lon], { icon, zIndexOffset: 500 })
+        .bindPopup(`Po ${fmtDauer(dalsi)} čisté jízdy – povinná přestávka 45 min`)
+        .addTo(routeGruppe);
+      nr++; dalsi += PAUSE_SEK;
+    }
+  }
+  letzteRoute.pausenAnzahl = nr - 1;
 }
 
 // Nejkratší pořadí zastávek (OSRM „trip", start v Krtelích)
@@ -818,9 +901,10 @@ function aktualisiereAnsicht(zoomen) {
     if (anzeigen.size) {
       info.innerHTML = `Naplánováno: <b>${zastavky(anzeigen.size)}</b> · <a href="#" id="planLeeren" style="color:var(--gruen)">zrušit výběr</a>` +
         (anzeigen.size >= 2 ? ` · <a href="#" id="planSortieren" style="color:var(--gruen)">🔀 nejkratší pořadí</a>` : "") +
-        `<br><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planRueck"${planZurueck ? " checked" : ""}> s návratem do Krtel</label>`;
+        `<br><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planRueck"${planZurueck ? " checked" : ""}> s návratem do Krtel</label>` +
+        `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planFrei"${planFreistadt ? " checked" : ""}> přes Freistadt (S10), ne Bad Leonfelden</label>`;
     } else {
-      info.textContent = "Zaškrtněte zastávky, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Šipkami pak změníte pořadí.";
+      info.textContent = "Zaškrtněte zastávky, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Pořadí pak změníte přetažením karty za ⠿.";
     }
     liste.appendChild(info);
     const a = info.querySelector("#planLeeren");
@@ -836,6 +920,13 @@ function aktualisiereAnsicht(zoomen) {
     if (rb) rb.onchange = () => {
       planZurueck = rb.checked;
       localStorage.setItem("planZurueck", planZurueck ? "1" : "0");
+      routeSig = "";
+      aktualisiereAnsicht(false);
+    };
+    const fr = info.querySelector("#planFrei");
+    if (fr) fr.onchange = () => {
+      planFreistadt = fr.checked;
+      localStorage.setItem("planFreistadt", planFreistadt ? "1" : "0");
       routeSig = "";
       aktualisiereAnsicht(false);
     };
@@ -878,19 +969,20 @@ function aktualisiereAnsicht(zoomen) {
       d.appendChild(cb);
       d.appendChild(w);
       if (imPlan) {
+        d.dataset.key = o.key;
         const ctr = document.createElement("div");
         ctr.className = "plan-ctrl";
         const nr = document.createElement("span");
         nr.className = "plan-nr";
         nr.textContent = planKeys.indexOf(o.key) + 1;
         ctr.appendChild(nr);
-        for (const [txt, dir] of [["▲", -1], ["▼", 1]]) {
-          const b = document.createElement("button");
-          b.textContent = txt;
-          b.title = "změnit pořadí";
-          b.onclick = (ev) => { ev.stopPropagation(); planVerschieben(o.key, dir); };
-          ctr.appendChild(b);
-        }
+        const griff = document.createElement("span");
+        griff.className = "plan-griff";
+        griff.textContent = "⠿";
+        griff.title = "táhnutím změníte pořadí";
+        griff.onpointerdown = (ev) => planZiehen(ev, d);
+        griff.onclick = (ev) => ev.stopPropagation();
+        ctr.appendChild(griff);
         d.appendChild(ctr);
       }
     } else {
