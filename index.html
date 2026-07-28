@@ -76,7 +76,13 @@
     display: flex; align-items: center; justify-content: center;
     border-radius: 50%; color: #fff; font-weight: 700; font-size: 11px;
     border: 2.5px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4);
-    white-space: nowrap;
+    white-space: nowrap; position: relative;
+  }
+  .marker-nr {
+    position: absolute; top: -8px; left: -8px; width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    background: #2b6cb0; color: #fff; border: 2px solid #fff; border-radius: 50%;
+    font-size: 11px; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.35);
   }
   .marker-kreis.erledigt { opacity: .92; }
   .popup-lief { font-size: 13px; }
@@ -189,7 +195,7 @@ let zeitModus = "alle";
 let statusModus = "offen";
 // Plánovač: klíče (geoKey) zaškrtnutých zastávek v pořadí rozvozu, přežije obnovení stránky
 let planAuswahl = JSON.parse(localStorage.getItem("planAuswahl") || "[]");
-let planZurueck = localStorage.getItem("planZurueck") === "1";
+let planZurueck = localStorage.getItem("planZurueck") !== "0"; // návrat do Krtel: výchozí zapnuto
 let letzteOrte = new Map();
 function planSpeichern() { localStorage.setItem("planAuswahl", JSON.stringify(planAuswahl)); }
 function planVerschieben(key, dir) {
@@ -766,7 +772,7 @@ function aktualisiereAnsicht(zoomen) {
     const groesse = Math.max(34, Math.min(64, 26 + Math.sqrt(gesamt) * 1.1));
     const icon = L.divIcon({
       className: "marker-label",
-      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${markerFarbe}">${planModus ? planNr + ". " : ""}${erledigt ? "✓ " : ""}${markerText(gesamt)}</div>`,
+      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${markerFarbe}">${erledigt ? "✓ " : ""}${markerText(gesamt)}${planModus ? `<span class="marker-nr">${planNr}</span>` : ""}</div>`,
       iconSize: [groesse, groesse], iconAnchor: [groesse / 2, groesse / 2]
     });
     const m = L.marker([pos.lat, pos.lon], { icon }).addTo(markerGruppe);
@@ -829,7 +835,7 @@ function aktualisiereAnsicht(zoomen) {
     const rb = info.querySelector("#planRueck");
     if (rb) rb.onchange = () => {
       planZurueck = rb.checked;
-      localStorage.setItem("planZurueck", planZurueck ? "1" : "");
+      localStorage.setItem("planZurueck", planZurueck ? "1" : "0");
       routeSig = "";
       aktualisiereAnsicht(false);
     };
@@ -892,6 +898,16 @@ function aktualisiereAnsicht(zoomen) {
     }
     d.onclick = () => { karte.setView([o.pos.lat, o.pos.lon], 13); };
     liste.appendChild(d);
+  }
+
+  // návrat domů jako poslední položka plánu
+  if (planModus && planZurueck && anzeigen.size) {
+    const heim = document.createElement("div");
+    heim.className = "stopp";
+    heim.innerHTML = `<b>🏠 Zpět do Krtel</b><span class="grau" data-leg="${planKeys.length}"></span>`;
+    heim.onclick = () => { if (startPos) karte.setView([startPos.lat, startPos.lon], 12); };
+    const zaskrtnute = liste.querySelectorAll(".im-plan");
+    zaskrtnute[zaskrtnute.length - 1].after(heim);
   }
 
   // --- nenalezené adresy ---
