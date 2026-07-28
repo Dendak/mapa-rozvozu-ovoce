@@ -49,6 +49,11 @@
   .stopp .grau { color: #666; }
   .stopp.erledigt { background: #e6f4ea; border-color: #b7dfc0; }
   .stopp.erledigt:hover { background: #d8eedf; }
+  .stopp.mit-cb { display: flex; gap: 8px; align-items: flex-start; }
+  .stopp.mit-cb input { width: 17px; height: 17px; flex: none; margin: 2px 0 0; cursor: pointer; accent-color: var(--gruen); }
+  .stopp-inhalt { flex: 1; }
+  .stopp.im-plan { background: #e7effa; border-color: #b9cdea; }
+  .stopp.im-plan:hover { background: #dbe7f7; }
   #fehler { color: #a33; font-size: 12.5px; line-height: 1.5; }
   #ladehinweis {
     position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1200;
@@ -98,6 +103,7 @@
         <button class="klein aktiv" data-s="offen">🔴 Ještě rozvézt</button>
         <button class="klein" data-s="geliefert">✓ Doručeno</button>
         <button class="klein" data-s="alle">Vše</button>
+        <button class="klein" data-s="plan">🗺️ Plánovač</button>
       </div>
     </div>
 
@@ -119,7 +125,7 @@
     </div>
 
     <div class="block">
-      <h2>Součty (výběr)</h2>
+      <h2 id="summenTitel">Součty (výběr)</h2>
       <table class="summen" id="summen"></table>
     </div>
 
@@ -169,6 +175,8 @@ let leseFehler = 0;
 let obstAuswahl = new Set();
 let zeitModus = "alle";
 let statusModus = "offen";
+// Plánovač: klíče (geoKey) zaškrtnutých zastávek, přežije obnovení stránky
+let planAuswahl = new Set(JSON.parse(localStorage.getItem("planAuswahl") || "[]"));
 let geocodeLaeuft = false;
 
 // ---------- Mapa ----------
@@ -620,14 +628,19 @@ function aktualisiereAnsicht(zoomen) {
     const k = geoKey(z);
     const pos = geoCache[k];
     if (!pos) { if (k in geoCache) ohneKoord.push(z); continue; }
-    if (!orte.has(k)) orte.set(k, { pos, zeilen: [] });
+    if (!orte.has(k)) orte.set(k, { pos, key: k, zeilen: [] });
     orte.get(k).zeilen.push(z);
   }
+
+  // Plánovač: na mapě a v součtech jsou jen zaškrtnuté zastávky
+  const planModus = statusModus === "plan";
+  const anzeigen = planModus ? new Map([...orte].filter(([k]) => planAuswahl.has(k))) : orte;
+  document.getElementById("summenTitel").textContent = planModus ? "Součty (plán)" : "Součty (výběr)";
 
   // --- markery ---
   markerGruppe.clearLayers();
   const punkte = [];
-  for (const { pos, zeilen: zl } of orte.values()) {
+  for (const { pos, zeilen: zl } of anzeigen.values()) {
     const gesamt = zl.reduce((s, z) => s + z.menge, 0);
     const sorten = [...new Set(zl.map(z => z.obst))];
     const farbe = sorten.length === 1 ? farbeFuer(sorten[0]) : FARBE_GEMISCHT;
@@ -647,7 +660,8 @@ function aktualisiereAnsicht(zoomen) {
 
   // --- součty ---
   const summen = {};
-  for (const z of zeilen) {
+  const zeilenSumme = planModus ? [...anzeigen.values()].flatMap(o => o.zeilen) : zeilen;
+  for (const z of zeilenSumme) {
     if (!summen[z.obst]) summen[z.obst] = { kg: 0, eur: 0 };
     summen[z.obst].kg += z.menge;
     summen[z.obst].eur += z.summe || 0;
@@ -655,14 +669,14 @@ function aktualisiereAnsicht(zoomen) {
   const tabelle = document.getElementById("summen");
   tabelle.innerHTML = "";
   let gKg = 0, gEur = 0;
-  const hatEur = zeilen.some(z => z.summe);
+  const hatEur = zeilenSumme.some(z => z.summe);
   for (const [obst, s] of Object.entries(summen).sort()) {
     gKg += s.kg; gEur += s.eur;
     tabelle.insertAdjacentHTML("beforeend",
       `<tr><td><span class="punkt" style="background:${farbeFuer(obst)};margin-right:6px;vertical-align:-1px"></span>${esc(obst)}</td><td class="z">${fmtKg(s.kg)}</td>${hatEur ? `<td class="z">${fmtEur(s.eur)}</td>` : ""}</tr>`);
   }
   tabelle.insertAdjacentHTML("beforeend",
-    `<tr style="border-top:1px solid #b9c5a5"><td><b>Celkem · ${zastavky(orte.size)}</b></td><td class="z">${fmtKg(gKg)}</td>${hatEur ? `<td class="z">${fmtEur(gEur)}</td>` : ""}</tr>`);
+    `<tr style="border-top:1px solid #b9c5a5"><td><b>Celkem · ${zastavky(anzeigen.size)}</b></td><td class="z">${fmtKg(gKg)}</td>${hatEur ? `<td class="z">${fmtEur(gEur)}</td>` : ""}</tr>`);
   if (hatEur && kurzCZK && gEur) {
     tabelle.insertAdjacentHTML("beforeend",
       `<tr><td colspan="3" style="text-align:right;color:#555;font-size:12.5px;padding-top:2px">≈ <b>${Math.round(gEur * kurzCZK).toLocaleString("cs-CZ")} Kč</b> <span style="color:#999">(${kurzCZK.toLocaleString("cs-CZ", { maximumFractionDigits: 3 })} Kč/€ · ${kurzZdroj})</span></td></tr>`);
@@ -671,6 +685,23 @@ function aktualisiereAnsicht(zoomen) {
   // --- seznam zastávek ---
   const liste = document.getElementById("stopps");
   liste.innerHTML = orte.size ? "" : (alleZeilen.length ? "Ve výběru nic není." : "–");
+  if (planModus && orte.size) {
+    const info = document.createElement("div");
+    info.style.cssText = "font-size:12.5px;color:#555;margin-bottom:6px;line-height:1.4";
+    if (anzeigen.size) {
+      info.innerHTML = `Naplánováno: <b>${zastavky(anzeigen.size)}</b> · <a href="#" id="planLeeren" style="color:var(--gruen)">zrušit výběr</a>`;
+    } else {
+      info.textContent = "Zaškrtněte zastávky, které chcete vzít na cestu – mapa a součty ukážou jen ty.";
+    }
+    liste.appendChild(info);
+    const a = info.querySelector("#planLeeren");
+    if (a) a.onclick = (ev) => {
+      ev.preventDefault();
+      planAuswahl.clear();
+      localStorage.setItem("planAuswahl", "[]");
+      aktualisiereAnsicht(false);
+    };
+  }
   const sortiert = [...orte.values()].sort((a, b) => {
     const da = a.zeilen[0].datum ? a.zeilen[0].datum.getTime() : 9e15;
     const db = b.zeilen[0].datum ? b.zeilen[0].datum.getTime() : 9e15;
@@ -683,10 +714,29 @@ function aktualisiereAnsicht(zoomen) {
     const erledigt = o.zeilen.every(z => z.geliefert === true);
     const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
     const d = document.createElement("div");
-    d.className = "stopp" + (erledigt ? " erledigt" : "");
-    d.innerHTML = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc(o.zeilen.map(z => z.kunde).filter(Boolean).join(" / ") || adr)}</b>` +
+    const imPlan = planAuswahl.has(o.key);
+    d.className = "stopp" + (erledigt ? " erledigt" : "") + (planModus ? " mit-cb" + (imPlan ? " im-plan" : "") : "");
+    const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc(o.zeilen.map(z => z.kunde).filter(Boolean).join(" / ") || adr)}</b>` +
       `<span class="grau">${esc(adr)}</span>` +
       `<span class="grau"> · ${kg ? fmtKg(kg) : "množství zatím neznámé"}${eur ? " · " + fmtEur(eur) : ""}</span>`;
+    if (planModus) {
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = imPlan;
+      cb.onclick = (ev) => ev.stopPropagation();
+      cb.onchange = () => {
+        if (cb.checked) planAuswahl.add(o.key); else planAuswahl.delete(o.key);
+        localStorage.setItem("planAuswahl", JSON.stringify([...planAuswahl]));
+        aktualisiereAnsicht(false);
+      };
+      const w = document.createElement("div");
+      w.className = "stopp-inhalt";
+      w.innerHTML = inhalt;
+      d.appendChild(cb);
+      d.appendChild(w);
+    } else {
+      d.innerHTML = inhalt;
+    }
     d.onclick = () => { karte.setView([o.pos.lat, o.pos.lon], 13); };
     liste.appendChild(d);
   }
