@@ -37,6 +37,18 @@ Bez hlavičky sloupců; list `Tabelle1`:
   mají přednost před geokódováním a přepíší i starou cache — řeší špatně nalezené adresy.
 - Parser podporuje i formát B (pojmenované sloupce Datum/Kunde/Adresse/PLZ/Ort/Obst/Menge/Notiz).
 
+## Plánovač (režim „plan")
+
+Čtvrté tlačítko ve Stavu rozvozu. Zaškrtnuté nedoručené zastávky (klíč = geoKey,
+pořadí v poli `planAuswahl`, localStorage) tvoří plán: mapa/součty ukazují jen je.
+Pořadí se mění přetažením karty za úchyt ⠿ (pointer events na `document` —
+capture na úchytu nejde, přesun v DOM by ho zrušil). Trasa přes veřejný OSRM
+(`router.project-osrm.org`): route s `annotations=duration` pro značky povinné
+pauzy po 4:30 jízdy, trip pro „nejkratší pořadí". Start je Krtely 70 (Nominatim,
+cache `startPos`); volby: návrat do Krtel (výchozí ano) a průjezd přes Wullowitz
+(„přes Freistadt", výchozí ano — jinak OSRM vede z Linze přes Bad Leonfelden).
+Průjezdní body nejsou cíle (`ziel: false`) — úseky se pro dojezdy slučují.
+
 ## Zásady
 
 - Vše v jednom `index.html`, žádné závislosti kromě CDN (Leaflet, SheetJS). Žádný build.
