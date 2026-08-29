@@ -79,6 +79,10 @@
     border: 2.5px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4);
     white-space: nowrap; position: relative;
   }
+  .marker-sorten {
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 10px; line-height: 1.2; text-shadow: 0 1px 2px rgba(0,0,0,.55);
+  }
   .marker-nr {
     position: absolute; top: -8px; left: -8px; width: 20px; height: 20px;
     display: flex; align-items: center; justify-content: center;
@@ -848,14 +852,33 @@ function aktualisiereAnsicht(zoomen) {
   for (const { pos, zeilen: zl } of anzeigen.values()) {
     planNr++;
     const gesamt = zl.reduce((s, z) => s + z.menge, 0);
-    const sorten = [...new Set(zl.map(z => z.obst))];
-    const farbe = sorten.length === 1 ? farbeFuer(sorten[0]) : FARBE_GEMISCHT;
     const erledigt = zl.every(z => z.geliefert === true);
-    const markerFarbe = erledigt ? "#2e7d32" : farbe; // doručené zastávky zeleně
-    const groesse = Math.max(34, Math.min(64, 26 + Math.sqrt(gesamt) * 1.1));
+    // množství po druzích ovoce (pořadí = pořadí v tabulce)
+    const proObst = new Map();
+    for (const z of zl) proObst.set(z.obst, (proObst.get(z.obst) || 0) + z.menge);
+    const mehrsortig = !erledigt && proObst.size > 1 && gesamt > 0;
+    let hintergrund, inhalt;
+    if (mehrsortig) {
+      // koláč: barevné výseče podle podílu kg, uvnitř množství po druzích
+      let acc = 0;
+      const teile = [];
+      for (const [obst, kg] of proObst) {
+        const von = (acc / gesamt) * 100;
+        acc += kg;
+        teile.push(`${farbeFuer(obst)} ${von.toFixed(2)}% ${(acc / gesamt * 100).toFixed(2)}%`);
+      }
+      hintergrund = `conic-gradient(${teile.join(", ")})`;
+      inhalt = `<div class="marker-sorten">` +
+        [...proObst.values()].map(kg => `<div>${markerText(kg)}</div>`).join("") + `</div>`;
+    } else {
+      const sorten = [...proObst.keys()];
+      hintergrund = erledigt ? "#2e7d32" : (sorten.length === 1 ? farbeFuer(sorten[0]) : FARBE_GEMISCHT);
+      inhalt = markerText(gesamt);
+    }
+    const groesse = Math.max(mehrsortig ? 44 : 34, Math.min(64, 26 + Math.sqrt(gesamt) * 1.1));
     const icon = L.divIcon({
       className: "marker-label",
-      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${markerFarbe}">${erledigt ? "✓ " : ""}${markerText(gesamt)}${planModus ? `<span class="marker-nr">${planNr}</span>` : ""}</div>`,
+      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${hintergrund}">${erledigt ? "✓ " : ""}${inhalt}${planModus ? `<span class="marker-nr">${planNr}</span>` : ""}</div>`,
       iconSize: [groesse, groesse], iconAnchor: [groesse / 2, groesse / 2]
     });
     const m = L.marker([pos.lat, pos.lon], { icon }).addTo(markerGruppe);
@@ -949,7 +972,7 @@ function aktualisiereAnsicht(zoomen) {
     const d = document.createElement("div");
     const imPlan = planKeys.includes(o.key);
     d.className = "stopp" + (erledigt ? " erledigt" : "") + (planModus ? " mit-cb" + (imPlan ? " im-plan" : "") : "");
-    const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc(o.zeilen.map(z => z.kunde).filter(Boolean).join(" / ") || adr)}</b>` +
+    const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc([...new Set(o.zeilen.map(z => z.kunde).filter(Boolean))].join(" / ") || adr)}</b>` +
       `<span class="grau">${esc(adr)}</span>` +
       `<span class="grau"> · ${kg ? fmtKg(kg) : "množství zatím neznámé"}${eur ? " · " + fmtEur(eur) : ""}</span>`;
     if (planModus) {
