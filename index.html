@@ -47,6 +47,21 @@
   .stopp:hover { background: #e8eedb; border-color: #cdd8b8; }
   .stopp b { display: block; }
   .stopp .grau { color: #666; }
+  .stopp .notiz { display: block; color: #8a6d1f; font-style: italic; font-size: 12px; margin-top: 2px; }
+  .stopp .notiz.warn { color: #b3261e; font-weight: 600; font-style: normal; }
+  a.nav { color: #2b6cb0; text-decoration: none; font-weight: 600; font-size: 12px; white-space: nowrap; }
+  a.nav:hover { text-decoration: underline; }
+  .stopp a.tel, .popup-lief a.tel { color: #2b6cb0; text-decoration: none; }
+  #suche {
+    width: 100%; padding: 6px 9px; font-size: 13px; border: 1px solid #b9c5a5; border-radius: 6px;
+    margin-bottom: 8px; background: #fff;
+  }
+  #dateiBlock { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: #777; }
+  #kartenToggle {
+    display: none; position: fixed; right: 12px; bottom: 12px; z-index: 1300;
+    padding: 9px 14px; font-size: 14px; font-weight: 600; border: 0; border-radius: 22px;
+    background: var(--gruen); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); cursor: pointer;
+  }
   .stopp.erledigt { background: #e6f4ea; border-color: #b7dfc0; }
   .stopp.erledigt:hover { background: #d8eedf; }
   .stopp.mit-cb { display: flex; gap: 8px; align-items: flex-start; }
@@ -108,7 +123,9 @@
   input[type=date] { font-size: 13px; padding: 3px; border: 1px solid #b9c5a5; border-radius: 4px; }
   @media (max-width: 700px) {
     #app { flex-direction: column; }
-    #sidebar { width: 100%; min-width: 0; max-height: 45%; }
+    #sidebar { width: 100%; min-width: 0; max-height: 50%; }
+    #kartenToggle { display: block; }
+    body.nur-karte #sidebar { display: none; }
   }
 </style>
 </head>
@@ -120,11 +137,9 @@
       <div class="status" id="status">Žádný excelový soubor není připojen</div>
     </div>
 
-    <div class="block">
-      <button class="gross" id="btnDatei">📂 Vybrat excelový soubor (Obst.xlsx)</button>
-      <div style="font-size:12px;color:#555;margin-top:6px">
-        Mapa se aktualizuje automaticky, jakmile soubor v Excelu uložíte.
-      </div>
+    <div class="block" id="dateiBlock">
+      <button class="klein" id="btnDatei">📂 Připojit lokální Obst.xlsx</button>
+      <span>data z webu se obnovují samy; lokální soubor má přednost a sleduje se po uložení</span>
     </div>
 
     <div class="block" id="statusBlock" style="display:none">
@@ -162,6 +177,7 @@
 
     <div class="block">
       <h2>Zastávky</h2>
+      <input type="search" id="suche" placeholder="🔍 hledat jméno, adresu, poznámku …" autocomplete="off">
       <div id="stopps">–</div>
     </div>
 
@@ -173,6 +189,7 @@
   <div id="map"></div>
 </div>
 <div id="ladehinweis">Hledám adresy na mapě …</div>
+<button id="kartenToggle">🗺️ Jen mapa</button>
 
 <script>
 "use strict";
@@ -209,7 +226,20 @@ let statusModus = "offen";
 // Plánovač: klíče (geoKey) zaškrtnutých zastávek v pořadí rozvozu, přežije obnovení stránky
 let planAuswahl = JSON.parse(localStorage.getItem("planAuswahl") || "[]");
 let planZurueck = localStorage.getItem("planZurueck") !== "0"; // návrat do Krtel: výchozí zapnuto
+let planAbfahrt = localStorage.getItem("planAbfahrt") || "07:00"; // odjezd z Krtel pro výpočet příjezdů
+const ENTLADE_MIN = 15; // odhad vykládky na zastávce (pro časy příjezdů)
 let letzteOrte = new Map();
+let suchText = ""; // filtr seznamu zastávek (jen seznam, mapa a součty zůstávají)
+
+// telefonní čísla v poznámce jako odkazy tel:
+function notizHtml(t) {
+  return esc(t).replace(/(\+?\d[\d\s\/-]{6,}\d)/g, m => `<a class="tel" href="tel:${m.replace(/[\s\/-]/g, "")}">${m}</a>`);
+}
+function navUrl(pos) { return `https://www.google.com/maps/dir/?api=1&destination=${pos.lat},${pos.lon}`; }
+function fmtUhr(min) {
+  const m = Math.round(min) % (24 * 60);
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+}
 function planSpeichern() { localStorage.setItem("planAuswahl", JSON.stringify(planAuswahl)); }
 // Přetažení karty za úchyt ⠿ mění pořadí zastávek (myš i dotyk)
 function planZiehen(ev, row) {
@@ -279,7 +309,7 @@ function extrahujKoord(z) {
     const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
     if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
       z.koord = { lat, lon };
-      z[feld] = putz(String(z[feld]).replace(m[0], " ").replace(/\(\s*\)/, " "));
+      z[feld] = putz(String(z[feld]).replace(m[0], " ").replace(/\(\s*\)/, " ")).replace(/^[\s,;–—-]+/, "");
       return;
     }
   }
@@ -645,14 +675,27 @@ function routeAktualisieren(ziele) {
 function routeAnzeigen() {
   if (!letzteRoute) return;
   const pausen = letzteRoute.pausenAnzahl ?? Math.floor(letzteRoute.duration / PAUSE_SEK);
+  // časy příjezdů: odjezd + jízda + 45 min za každou pauzu + vykládka na předchozích zastávkách
+  const [ah, am] = planAbfahrt.split(":").map(Number);
+  const abfahrt = isNaN(ah) || isNaN(am) ? null : ah * 60 + am;
+  const legs = letzteRoute.stopLegs || letzteRoute.legs;
+  let fahrt = 0, ende = null;
+  legs.forEach((leg, i) => {
+    fahrt += leg.duration;
+    let text = `⤷ dojezd ${fmtKm(leg.distance)} · ${fmtDauer(leg.duration)}`;
+    if (abfahrt !== null) {
+      const ankunft = abfahrt + fahrt / 60 + Math.floor(fahrt / PAUSE_SEK) * 45 + i * ENTLADE_MIN;
+      text += ` · ${i === legs.length - 1 && planZurueck ? "doma" : "příjezd"} ~<b>${fmtUhr(ankunft)}</b>`;
+      ende = ankunft;
+    }
+    const el = document.querySelector(`[data-leg="${i}"]`);
+    if (el) el.innerHTML = text;
+  });
   document.getElementById("routeInfo").innerHTML =
     `🚗 Trasa: <b>${fmtKm(letzteRoute.distance)}</b> · <b>${fmtDauer(letzteRoute.duration)}</b>` +
     (pausen ? ` + ${pausen}× pauza 45 min` : "") +
-    `<span style="color:#999"> · z Krtel${planZurueck ? " a zpět" : ""}${planFreistadt ? ", přes Freistadt" : ""}</span>`;
-  (letzteRoute.stopLegs || letzteRoute.legs).forEach((leg, i) => {
-    const el = document.querySelector(`[data-leg="${i}"]`);
-    if (el) el.textContent = `⤷ dojezd ${fmtKm(leg.distance)} · ${fmtDauer(leg.duration)}`;
-  });
+    (ende !== null ? ` · odjezd ${planAbfahrt}, konec ~<b>${fmtUhr(ende)}</b>` : "") +
+    `<span style="color:#999"> · z Krtel${planZurueck ? " a zpět" : ""}${planFreistadt ? ", přes Freistadt" : ""}, vykládka ${ENTLADE_MIN} min/zastávka</span>`;
 }
 
 async function routeLaden(ziele) {
@@ -873,7 +916,7 @@ function aktualisiereAnsicht(zoomen) {
   markerGruppe.clearLayers();
   const punkte = [];
   let planNr = 0;
-  for (const { pos, zeilen: zl } of anzeigen.values()) {
+  for (const [key, { pos, zeilen: zl }] of anzeigen) {
     planNr++;
     const gesamt = zl.reduce((s, z) => s + z.menge, 0);
     const erledigt = zl.every(z => z.geliefert === true);
@@ -906,7 +949,8 @@ function aktualisiereAnsicht(zoomen) {
       iconSize: [groesse, groesse], iconAnchor: [groesse / 2, groesse / 2]
     });
     const m = L.marker([pos.lat, pos.lon], { icon }).addTo(markerGruppe);
-    m.bindPopup(popupHtml(zl, gesamt), { maxWidth: 340 });
+    m.bindPopup(popupHtml(zl, gesamt, pos), { maxWidth: 340 });
+    orte.get(key).marker = m; // kliknutí v seznamu otevře bublinu
     punkte.push([pos.lat, pos.lon]);
   }
   if (zoomen && punkte.length) karte.fitBounds(punkte, { padding: [50, 50], maxZoom: 12, animate: false });
@@ -949,10 +993,17 @@ function aktualisiereAnsicht(zoomen) {
       info.innerHTML = `Naplánováno: <b>${zastavky(anzeigen.size)}</b> · <a href="#" id="planLeeren" style="color:var(--gruen)">zrušit výběr</a>` +
         (anzeigen.size >= 2 ? ` · <a href="#" id="planSortieren" style="color:var(--gruen)">🔀 nejkratší pořadí</a>` : "") +
         `<br><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planRueck"${planZurueck ? " checked" : ""}> s návratem do Krtel</label>` +
-        `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planFrei"${planFreistadt ? " checked" : ""}> přes Freistadt (S10), ne Bad Leonfelden</label>`;
+        `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planFrei"${planFreistadt ? " checked" : ""}> přes Freistadt (S10), ne Bad Leonfelden</label>` +
+        `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px">🕖 Odjezd z Krtel <input type="time" id="planAbfahrt" value="${esc(planAbfahrt)}" style="font-size:13px;padding:2px 4px;border:1px solid #b9c5a5;border-radius:4px"></label>`;
     } else {
-      info.textContent = "Zaškrtněte u zastávek druhy ovoce, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Pořadí pak změníte přetažením karty za ⠿.";
+      info.textContent = "Zaškrtněte u zastávek druhy ovoce, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Pořadí pak změníte přetažením karty za ⠿, u každé zastávky uvidíte odhad příjezdu.";
     }
+    const ab = info.querySelector("#planAbfahrt");
+    if (ab) ab.onchange = () => {
+      planAbfahrt = ab.value || "07:00";
+      localStorage.setItem("planAbfahrt", planAbfahrt);
+      aktualisiereAnsicht(false);
+    };
     liste.appendChild(info);
     const a = info.querySelector("#planLeeren");
     if (a) a.onclick = (ev) => {
@@ -987,18 +1038,26 @@ function aktualisiereAnsicht(zoomen) {
     const rang = new Map(planKeys.map((k, i) => [k, i]));
     sortiert.sort((a, b) => (rang.has(a.key) ? rang.get(a.key) : 9e9) - (rang.has(b.key) ? rang.get(b.key) : 9e9));
   }
+  let versteckt = 0;
   for (const o of sortiert) {
     const z0 = o.zeilen[0];
     const kg = o.zeilen.reduce((s, z) => s + z.menge, 0);
     const eur = o.zeilen.reduce((s, z) => s + (z.summe || 0), 0);
     const erledigt = o.zeilen.every(z => z.geliefert === true);
     const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
+    const notizen = [...new Set(o.zeilen.map(z => z.notiz).filter(Boolean))];
+    if (suchText) { // hledání filtruje jen seznam
+      const text = [adr, ...o.zeilen.map(z => z.kunde), ...o.zeilen.map(z => z.obst), ...notizen].join(" ").toLowerCase();
+      if (!text.includes(suchText)) { versteckt++; continue; }
+    }
     const d = document.createElement("div");
     const imPlan = planKeys.includes(o.key);
     d.className = "stopp" + (erledigt ? " erledigt" : "") + (planModus ? " mit-cb" + (imPlan ? " im-plan" : "") : "");
     const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc([...new Set(o.zeilen.map(z => z.kunde).filter(Boolean))].join(" / ") || adr)}</b>` +
       `<span class="grau">${esc(adr)}</span>` +
-      `<span class="grau"> · ${kg ? fmtKg(kg) : "množství zatím neznámé"}${eur ? " · " + fmtEur(eur) : ""}</span>`;
+      `<span class="grau"> · ${kg ? fmtKg(kg) : "množství zatím neznámé"}${eur ? " · " + fmtEur(eur) : ""}</span>` +
+      ` <a class="nav" href="${navUrl(o.pos)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🧭 navigovat</a>` +
+      notizen.map(n => `<span class="notiz${/urlaub|dovolen|nicht|!/i.test(n) ? " warn" : ""}">📝 ${notizHtml(n)}</span>`).join("");
     if (planModus) {
       const w = document.createElement("div");
       w.className = "stopp-inhalt";
@@ -1056,8 +1115,18 @@ function aktualisiereAnsicht(zoomen) {
     } else {
       d.innerHTML = inhalt;
     }
-    d.onclick = () => { karte.setView([o.pos.lat, o.pos.lon], 13); };
+    d.onclick = () => {
+      karte.setView([o.pos.lat, o.pos.lon], 13);
+      if (o.marker) o.marker.openPopup();
+    };
     liste.appendChild(d);
+  }
+  if (versteckt) {
+    const v = document.createElement("div");
+    v.className = "grau";
+    v.style.cssText = "font-size:12px;padding:4px 8px";
+    v.textContent = `… ${versteckt} ${versteckt === 1 ? "zastávka neodpovídá" : (versteckt <= 4 ? "zastávky neodpovídají" : "zastávek neodpovídá")} hledání`;
+    liste.appendChild(v);
   }
 
   // návrat domů jako poslední položka plánu
@@ -1067,7 +1136,8 @@ function aktualisiereAnsicht(zoomen) {
     heim.innerHTML = `<b>🏠 Zpět do Krtel</b><span class="grau" data-leg="${planKeys.length}"></span>`;
     heim.onclick = () => { if (startPos) karte.setView([startPos.lat, startPos.lon], 12); };
     const zaskrtnute = liste.querySelectorAll(".im-plan");
-    zaskrtnute[zaskrtnute.length - 1].after(heim);
+    if (zaskrtnute.length) zaskrtnute[zaskrtnute.length - 1].after(heim);
+    else liste.appendChild(heim);
   }
 
   // --- nenalezené adresy ---
@@ -1080,7 +1150,7 @@ function aktualisiereAnsicht(zoomen) {
   } else fb.style.display = "none";
 }
 
-function popupHtml(zl, gesamt) {
+function popupHtml(zl, gesamt, pos) {
   const z0 = zl[0];
   const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
   const einKunde = new Set(zl.map(z => z.kunde)).size === 1;
@@ -1098,10 +1168,12 @@ function popupHtml(zl, gesamt) {
     html += `<td><span class="punkt" style="background:${farbeFuer(z.obst)};margin-right:4px;vertical-align:-1px"></span>${esc(z.obst)}</td>`;
     html += `<td style="text-align:right">${z.menge ? fmtKg(z.menge) : "?"}</td>`;
     html += `<td style="text-align:right">${z.summe ? fmtEur(z.summe) : ""}</td></tr>`;
-    if (z.notiz) html += `<tr><td colspan="6" style="color:#777;font-style:italic;padding-left:18px">📝 ${esc(z.notiz)}</td></tr>`;
+    if (z.notiz) html += `<tr><td colspan="6" style="color:#777;font-style:italic;padding-left:18px">📝 ${notizHtml(z.notiz)}</td></tr>`;
   }
   if (zl.length > 1) html += `<tr class="sum"><td colspan="4">Celkem</td><td style="text-align:right">${fmtKg(gesamt)}</td><td style="text-align:right">${gesEur ? fmtEur(gesEur) : ""}</td></tr>`;
-  html += `</table></div>`;
+  html += `</table>`;
+  if (pos) html += `<div style="margin-top:8px"><a class="nav" href="${navUrl(pos)}" target="_blank" rel="noopener">🧭 Navigovat (Google Maps)</a></div>`;
+  html += `</div>`;
   return html;
 }
 
@@ -1133,6 +1205,16 @@ document.querySelectorAll("#zeitKnoepfe button").forEach(b => {
 });
 document.getElementById("von").onchange = () => aktualisiereAnsicht(true);
 document.getElementById("bis").onchange = () => aktualisiereAnsicht(true);
+document.getElementById("suche").oninput = (ev) => {
+  suchText = ev.target.value.trim().toLowerCase();
+  aktualisiereAnsicht(false);
+};
+// mobil: přepínání mezi seznamem a celoobrazovkovou mapou
+document.getElementById("kartenToggle").onclick = (ev) => {
+  const nurKarte = document.body.classList.toggle("nur-karte");
+  ev.currentTarget.textContent = nurKarte ? "☰ Seznam" : "🗺️ Jen mapa";
+  setTimeout(() => karte.invalidateSize(), 50);
+};
 
 // testovací/ladicí rozhraní
 window.__ladeZeilen = (zeilen) => datenUebernehmen(zeilen.map(z => ({ ...z, datum: z.datum ? new Date(z.datum) : null })));

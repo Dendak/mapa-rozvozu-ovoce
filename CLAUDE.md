@@ -48,6 +48,18 @@ pauzy po 4:30 jízdy, trip pro „nejkratší pořadí". Start je Krtely 70 (Nom
 cache `startPos`); volby: návrat do Krtel (výchozí ano) a průjezd přes Wullowitz
 („přes Freistadt", výchozí ano — jinak OSRM vede z Linze přes Bad Leonfelden).
 Průjezdní body nejsou cíle (`ziel: false`) — úseky se pro dojezdy slučují.
+Výběr je po druzích ovoce (klíč `geoKey§druh`), karta zastávky ukazuje rozpis druhů
+se zaškrtávátky. Odjezd z Krtel (`planAbfahrt`, localStorage) → odhad příjezdů na
+zastávky: jízda + 45 min za každou pauzu (po 4:30) + `ENTLADE_MIN` (15) za zastávku.
+
+## Seznam zastávek
+
+Karta = jedna adresa (geoKey), sloučené řádky. Ukazuje poznámky (📝, `notizHtml`
+dělá z telefonů odkazy `tel:`, slova Urlaub/dovolená/! zvýrazní červeně) a odkaz
+🧭 navigovat (Google Maps dir na souřadnice). Klik na kartu = zoom + otevření
+bubliny (marker uložen v `orte.get(key).marker`). Hledání `#suche` filtruje jen
+seznam, mapa/součty/trasa zůstávají. Mobil (≤700 px): tlačítko `#kartenToggle`
+přepíná `body.nur-karte` (skryje panel, mapa přes celou obrazovku).
 
 ## Zásady
 
