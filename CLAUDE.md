@@ -8,19 +8,20 @@ v Rakousku a data vede v Excelu.
 
 ## Soubory
 
-- `index.html` — celá aplikace (Leaflet + OpenStreetMap, SheetJS z CDN, UI česky)
+- `index.html` — celá aplikace (Leaflet + OpenStreetMap, SheetJS z CDN). UI dvojjazyčné
+  cs/de: slovník `TEXTE`, `t(klíč, …)`, statické prvky `data-t`/`data-t-ph`, přepínač
+  `#sprachen` (localStorage `sprache`, výchozí podle jazyka prohlížeče). Názvy ovoce
+  z Excelu jsou německé, česká verze je překládá přes `OBST_CS`; locale `LOC()`.
 - `Obst.xlsx` — data rozvozu; **kopie**, originál je v OneDrive na PC majitele.
   Na web se nahrává vědomě a záměrně (majitel byl na veřejnost dat upozorněn).
 - `README.md` — popis pro návštěvníky
 
 ## Jak aplikace funguje
 
-1. Po otevření zkusí `fetch("Obst.xlsx")` — načte data přímo z webu
-   (status „🌐 Data načtena z webu"), novou verzi kontroluje každých 5 minut.
-2. Tlačítkem „Vybrat excelový soubor" lze připojit lokální soubor přes
-   File System Access API — pak má přednost, sleduje se `lastModified` každé 3 s
-   (auto-aktualizace po uložení v Excelu). Handle se ukládá do IndexedDB.
-3. Adresy se geokódují přes Nominatim (max. 1 dotaz/1,1 s, cache v localStorage,
+1. Po otevření `fetch("Obst.xlsx")` — data jen z webu (status „🌐 Data načtena z webu"),
+   novou verzi kontroluje každých 5 minut. (Připojení lokálního souboru přes File System
+   Access API bylo odstraněno — nepoužívalo se.)
+2. Adresy se geokódují přes Nominatim (max. 1 dotaz/1,1 s, cache v localStorage,
    několik fallback variant: `+", Österreich"` → raw s `countrycodes=at,cz,de,…` →
    jen segmenty s číslicemi → jen PSČ). Slovo „Selbstabholung" se z dotazu odstraňuje.
 
