@@ -258,6 +258,31 @@ const TEXTE = {
 // názvy ovoce z Excelu (německy) pro českou verzi
 const OBST_CS = { "Weichsel": "Višně", "Zwetschken": "Švestky", "Birnen Williams": "Hrušky Williams", "Äpfel": "Jablka",
   "Zwetschke": "Švestky", "Birnen": "Hrušky", "Apfel": "Jablka", "Kirschen": "Třešně", "Marillen": "Meruňky" };
+// poznámky z Excelu jsou německy – v české verzi se překládají po frázích (delší fráze mají přednost)
+const NOTIZ_CS = [
+  [/Abholung in Salzburg oder Radstadt möglich/gi, "možný odběr v Salzburgu nebo Radstadtu"],
+  [/Abholung in Salzburg möglich/gi, "možný odběr v Salzburgu"],
+  [/Zustellung nach Hause erst ab Di\b/gi, "dovoz domů až od út"],
+  [/Zustellung evtl\. am Wochenende/gi, "dovoz případně o víkendu"],
+  [/Wunsch: Einwegkisten \(nicht umfüllen\)/gi, "přání: jednorázové bedýnky (nechce přesypávat)"],
+  [/Preis (\S+) noch nicht fix vereinbart/gi, "cena $1 ještě není pevně domluvená"],
+  [/Preis ergänzen/gi, "doplnit cenu"],
+  [/inkl\. (\d+) € Trinkgeld/gi, "vč. $1 € spropitného"],
+  [/abgeholt bei/gi, "vyzvednuto u"], [/für nächstes Jahr/gi, "na příští rok"],
+  [/^geliefert\b/gi, "doručeno"], [/Rest von/gi, "zbytek z"], [/storniert/gi, "stornován"],
+  [/Großkiste/gi, "velká bedna"], [/pauschal/gi, "paušálně"],
+  [/telefonisch bestellt/gi, "objednáno telefonicky"], [/\bUrlaub\b/gi, "dovolená"],
+  [/^Pfarre$/gi, "fara"], [/\bSorte\b/gi, "odrůda"], [/\bca\.\s*/gi, "cca "], [/\bTel\./gi, "tel."],
+  [/\bAbholung\b/gi, "odběr"], [/\bmöglich\b/gi, "možný"], [/\bZustellung\b/gi, "dovoz"],
+  [/\bnach Hause\b/gi, "domů"], [/\berst ab\b/gi, "až od"], [/\bevtl\./gi, "případně"],
+  [/\bWochenende\b/gi, "víkend"], [/\bnoch nicht\b/gi, "ještě ne"], [/\bvereinbart\b/gi, "domluveno"],
+];
+function notizText(n) {
+  if (sprache !== "cs") return n;
+  let r = n;
+  for (const [re, ersatz] of NOTIZ_CS) r = r.replace(re, ersatz);
+  return r;
+}
 let sprache = localStorage.getItem("sprache") || (/^de/i.test(navigator.language || "") ? "de" : "cs");
 function t(k, ...args) { const v = TEXTE[sprache][k] ?? TEXTE.cs[k] ?? k; return typeof v === "function" ? v(...args) : v; }
 function LOC() { return sprache === "cs" ? "cs-CZ" : "de-AT"; }
@@ -317,7 +342,7 @@ let suchText = ""; // filtr seznamu zastávek (jen seznam, mapa a součty zůst�
 
 // telefonní čísla v poznámce jako odkazy tel:
 function notizHtml(t) {
-  return esc(t).replace(/(\+?\d[\d\s\/-]{6,}\d)/g, m => `<a class="tel" href="tel:${m.replace(/[\s\/-]/g, "")}">${m}</a>`);
+  return esc(notizText(t)).replace(/(\+?\d[\d\s\/-]{6,}\d)/g, m => `<a class="tel" href="tel:${m.replace(/[\s\/-]/g, "")}">${m}</a>`);
 }
 function navUrl(pos) { return `https://waze.com/ul?ll=${pos.lat},${pos.lon}&navigate=yes`; } // Waze: na mobilu otevře rovnou navigaci
 function fmtUhr(min) {

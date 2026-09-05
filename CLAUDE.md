@@ -11,7 +11,9 @@ v Rakousku a data vede v Excelu.
 - `index.html` — celá aplikace (Leaflet + OpenStreetMap, SheetJS z CDN). UI dvojjazyčné
   cs/de: slovník `TEXTE`, `t(klíč, …)`, statické prvky `data-t`/`data-t-ph`, přepínač
   `#sprachen` (localStorage `sprache`, výchozí podle jazyka prohlížeče). Názvy ovoce
-  z Excelu jsou německé, česká verze je překládá přes `OBST_CS`; locale `LOC()`.
+  z Excelu jsou německé, česká verze je překládá přes `OBST_CS`; poznámky (sloupec G,
+  německy) překládá po frázích `NOTIZ_CS` (`notizText`) — při nové poznámce s novým
+  obratem přidat frázi do slovníku; locale `LOC()`.
 - `Obst.xlsx` — data rozvozu; **kopie**, originál je v OneDrive na PC majitele.
   Na web se nahrává vědomě a záměrně (majitel byl na veřejnost dat upozorněn).
 - `README.md` — popis pro návštěvníky
