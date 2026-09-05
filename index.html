@@ -67,6 +67,9 @@
     padding: 9px 14px; font-size: 14px; font-weight: 600; border: 0; border-radius: 22px;
     background: var(--gruen); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); cursor: pointer;
   }
+  .stopp.storno { opacity: .7; cursor: default; }
+  .stopp.storno b { text-decoration: line-through; color: #777; }
+  .storno-titel { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .4px; margin: 10px 0 4px; }
   .stopp.erledigt { background: #e6f4ea; border-color: #b7dfc0; }
   .stopp.erledigt:hover { background: #d8eedf; }
   .stopp.mit-cb { display: flex; gap: 8px; align-items: flex-start; }
@@ -226,6 +229,7 @@ const TEXTE = {
     versteckt: n => `… ${n} ${n === 1 ? "zastávka neodpovídá" : (n <= 4 ? "zastávky neodpovídají" : "zastávek neodpovídá")} hledání`,
     heim: "🏠 Zpět do Krtel", griffTitel: "táhnutím změníte pořadí",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – zkontrolujte prosím zápis v Excelu`, obst: "Ovoce",
+    storno: "Zrušené objednávky",
   },
   de: {
     titel: "Obst-Lieferkarte",
@@ -253,6 +257,7 @@ const TEXTE = {
     versteckt: n => `… ${n} Stopp${n === 1 ? " passt" : "s passen"} nicht zur Suche`,
     heim: "🏠 Zurück nach Krtely", griffTitel: "Ziehen ändert die Reihenfolge",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – bitte Eintrag in Excel prüfen`, obst: "Obst",
+    storno: "Stornierte Bestellungen",
   },
 };
 // názvy ovoce z Excelu (německy) pro českou verzi
@@ -267,6 +272,7 @@ const NOTIZ_CS = [
   [/Wunsch: Einwegkisten \(nicht umfüllen\)/gi, "přání: jednorázové bedýnky (nechce přesypávat)"],
   [/Preis (\S+) noch nicht fix vereinbart/gi, "cena $1 ještě není pevně domluvená"],
   [/Preis ergänzen/gi, "doplnit cenu"],
+  [/STORNIERT/g, "ZRUŠENO"], [/\bursprünglich\b/gi, "původně"], [/meldet sich (\d{4}) wieder/gi, "ozve se znovu v roce $1"],
   [/inkl\. (\d+) € Trinkgeld/gi, "vč. $1 € spropitného"],
   [/abgeholt bei/gi, "vyzvednuto u"], [/für nächstes Jahr/gi, "na příští rok"],
   [/^geliefert\b/gi, "doručeno"], [/Rest von/gi, "zbytek z"], [/storniert/gi, "stornován"],
@@ -469,6 +475,7 @@ function parseVorlage(arr, kopf, zeilen) {
       geliefert: idx.geliefert != null ? istWahr(row[idx.geliefert]) : undefined,
     };
     if (!z.kunde && !z.ort && !z.adresse) continue;
+    z.storno = /^\s*(storn|zruš)/i.test(z.notiz);
     extrahujKoord(z);
     zeilen.push(z);
   }
@@ -496,6 +503,7 @@ function parseObstListe(arr, blattName, obstStart, zeilen) {
       notiz: putz(row[6]),
       geliefert: istWahr(row[0]),
     };
+    z.storno = /^\s*(storn|zruš)/i.test(z.notiz); // zrušená objednávka: mimo součty a mapu, v seznamu přeškrtnutá
     extrahujKoord(z);
     zeilen.push(z);
   }
@@ -872,7 +880,7 @@ function imStatus(z) {
 
 function gefiltert() {
   const zeitAktiv = document.getElementById("zeitBlock").style.display !== "none";
-  return alleZeilen.filter(z => (!zeitAktiv || imZeitraum(z)) && imStatus(z) && obstAuswahl.has(z.obst));
+  return alleZeilen.filter(z => !z.storno && (!zeitAktiv || imZeitraum(z)) && imStatus(z) && obstAuswahl.has(z.obst));
 }
 
 function fmtDatum(d) {
@@ -1146,6 +1154,26 @@ function aktualisiereAnsicht(zoomen) {
     const zaskrtnute = liste.querySelectorAll(".im-plan");
     if (zaskrtnute.length) zaskrtnute[zaskrtnute.length - 1].after(heim);
     else liste.appendChild(heim);
+  }
+
+  // --- zrušené objednávky (jen v režimu Vše, přeškrtnuté, mimo součty i mapu) ---
+  if (statusModus === "alle") {
+    const storno = alleZeilen.filter(z => z.storno && obstAuswahl.has(z.obst) &&
+      (!suchText || [z.kunde, z.adresse, z.notiz, z.obst].join(" ").toLowerCase().includes(suchText)));
+    if (storno.length) {
+      const h = document.createElement("div");
+      h.className = "storno-titel";
+      h.textContent = t("storno");
+      liste.appendChild(h);
+      for (const z of storno) {
+        const d = document.createElement("div");
+        d.className = "stopp storno";
+        d.innerHTML = `<b>${esc(z.kunde)}</b><span class="grau">${esc([z.adresse, (z.plz + " " + z.ort).trim()].filter(Boolean).join(", "))}` +
+          ` · <span class="punkt" style="background:${farbeFuer(z.obst)};vertical-align:-1px"></span> ${esc(obstName(z.obst))}</span>` +
+          (z.notiz ? `<span class="notiz">📝 ${notizHtml(z.notiz)}</span>` : "");
+        liste.appendChild(d);
+      }
+    }
   }
 
   // --- nenalezené adresy ---
