@@ -218,7 +218,7 @@ const TEXTE = {
     webGeladen: d => `🌐 Data načtena z webu${d ? " · nahráno: " + d : ""}`,
     trasa: "🚗 Trasa:", pauza: n => ` + ${n}× pauza 45 min`,
     odjezdKonec: (ab, ende) => ` · odjezd ${ab}, konec ~<b>${ende}</b>`,
-    routeZusatz: (zurueck, frei, min) => ` · z Krtel${zurueck ? " a zpět" : ""}${frei ? ", přes Freistadt" : ""}, vykládka ${min} min/zastávka`,
+    routeZusatz: (zurueck, min) => ` · z Krtel${zurueck ? " a zpět" : ""}, vykládka ${min} min/zastávka`,
     dojezd: (km, dauer) => `⤷ dojezd ${km} · ${dauer}`, prijezd: "příjezd", doma: "doma",
     berechne: "Počítám trasu …", routeFehler: "Trasu se nepodařilo spočítat (routovací server je nedostupný).",
     startFehler: "Výchozí bod (Krtely) se nepodařilo najít.", sucheReihenfolge: "Hledám nejkratší pořadí …",
@@ -226,7 +226,7 @@ const TEXTE = {
     pausePopup: d => `Po ${d} čisté jízdy – povinná přestávka 45 min`,
     celkem: "Celkem", stopps: n => n === 1 ? "1 zastávka" : (n >= 2 && n <= 4 ? n + " zastávky" : n + " zastávek"),
     nichts: "Ve výběru nic není.", naplanovano: "Naplánováno:", zrusit: "zrušit výběr", nejkratsi: "🔀 nejkratší pořadí",
-    navrat: "s návratem do Krtel", freistadt: "přes Freistadt (S10), ne Bad Leonfelden", odjezd: "🕖 Odjezd z Krtel",
+    navrat: "s návratem do Krtel", odjezd: "🕖 Odjezd z Krtel",
     planHinweis: "Zaškrtněte u zastávek druhy ovoce, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Zaškrtávat jde i přímo v mapě – klikněte na bledý bod. Pořadí pak změníte přetažením karty za ⠿, u každé zastávky uvidíte odhad příjezdu.",
     mengeUnbekannt: "množství zatím neznámé", waze: "🧭 Waze", popupWaze: "🧭 Navigovat ve Waze",
     versteckt: n => `… ${n} ${n === 1 ? "zastávka neodpovídá" : (n <= 4 ? "zastávky neodpovídají" : "zastávek neodpovídá")} hledání`,
@@ -246,7 +246,7 @@ const TEXTE = {
     webGeladen: d => `🌐 Daten vom Web geladen${d ? " · hochgeladen: " + d : ""}`,
     trasa: "🚗 Route:", pauza: n => ` + ${n}× Pause 45 min`,
     odjezdKonec: (ab, ende) => ` · Abfahrt ${ab}, Ende ~<b>${ende}</b>`,
-    routeZusatz: (zurueck, frei, min) => ` · ab Krtely${zurueck ? " und zurück" : ""}${frei ? ", über Freistadt" : ""}, Entladen ${min} min/Stopp`,
+    routeZusatz: (zurueck, min) => ` · ab Krtely${zurueck ? " und zurück" : ""}, Entladen ${min} min/Stopp`,
     dojezd: (km, dauer) => `⤷ Anfahrt ${km} · ${dauer}`, prijezd: "Ankunft", doma: "zu Hause",
     berechne: "Route wird berechnet …", routeFehler: "Route konnte nicht berechnet werden (Routing-Server nicht erreichbar).",
     startFehler: "Startpunkt (Krtely) wurde nicht gefunden.", sucheReihenfolge: "Suche kürzeste Reihenfolge …",
@@ -254,7 +254,7 @@ const TEXTE = {
     pausePopup: d => `Nach ${d} reiner Fahrzeit – Pflichtpause 45 min`,
     celkem: "Gesamt", stopps: n => n === 1 ? "1 Stopp" : n + " Stopps",
     nichts: "Nichts in der Auswahl.", naplanovano: "Geplant:", zrusit: "Auswahl löschen", nejkratsi: "🔀 kürzeste Reihenfolge",
-    navrat: "mit Rückfahrt nach Krtely", freistadt: "über Freistadt (S10), nicht Bad Leonfelden", odjezd: "🕖 Abfahrt in Krtely",
+    navrat: "mit Rückfahrt nach Krtely", odjezd: "🕖 Abfahrt in Krtely",
     planHinweis: "Bei den Stopps die Obstsorten anhaken, die auf die Tour mitkommen – Karte, Summen und Route zeigen nur diese. Anhaken geht auch direkt in der Karte – auf einen blassen Punkt klicken. Die Reihenfolge ändert man durch Ziehen der Karte am ⠿, bei jedem Stopp erscheint die geschätzte Ankunft.",
     mengeUnbekannt: "Menge noch unbekannt", waze: "🧭 Waze", popupWaze: "🧭 Mit Waze navigieren",
     versteckt: n => `… ${n} Stopp${n === 1 ? " passt" : "s passen"} nicht zur Suche`,
@@ -665,10 +665,7 @@ async function nominatim(anfrage, cc) {
 
 // ---------- Trasa plánovače (OSRM) ----------
 const START_ADRESSE = "Krtely 70, Malovice, Česko"; // odjezd s ovocem
-// průjezdní bod Wullowitz: vynutí koridor přes Freistadt (S10) místo Bad Leonfelden
-const VIA_FREISTADT = { lat: 48.611, lon: 14.463 };
 const PAUSE_SEK = 4.5 * 3600; // povinná přestávka po 4:30 čisté jízdy
-let planFreistadt = localStorage.getItem("planFreistadt") !== "0";
 // Krtely 70: souřadnice napevno (Nominatim jen jako upřesnění), aby trasa nezávisela na geokódování
 let startPos = JSON.parse(localStorage.getItem("startPos") || "null") || { lat: 49.0825996, lon: 14.1701045 };
 let routeTimer = null, routeSig = "", letzteRoute = null;
@@ -715,7 +712,7 @@ function routeAnzeigen() {
     `${t("trasa")} <b>${fmtKm(letzteRoute.distance)}</b> · <b>${fmtDauer(letzteRoute.duration)}</b>` +
     (pausen ? t("pauza", pausen) : "") +
     (ende !== null ? t("odjezdKonec", planAbfahrt, fmtUhr(ende)) : "") +
-    `<span style="color:#999">${t("routeZusatz", planZurueck, planFreistadt, ENTLADE_MIN)}</span>`;
+    `<span style="color:#999">${t("routeZusatz", planZurueck, ENTLADE_MIN)}</span>`;
 }
 
 async function routeLaden(ziele) {
@@ -724,12 +721,8 @@ async function routeLaden(ziele) {
   if (!(await startSuchen())) { info.textContent = t("startFehler"); return; }
   // ziel=true jsou zastávky (a návrat domů), ziel=false průjezdní body
   const punkte = [{ ...startPos, ziel: false }];
-  if (planFreistadt) punkte.push({ ...VIA_FREISTADT, ziel: false });
   for (const z of ziele) punkte.push({ ...z, ziel: true });
-  if (planZurueck) {
-    if (planFreistadt) punkte.push({ ...VIA_FREISTADT, ziel: false });
-    punkte.push({ ...startPos, ziel: true });
-  }
+  if (planZurueck) punkte.push({ ...startPos, ziel: true });
   const sig = JSON.stringify(punkte);
   if (sig === routeSig) { routeAnzeigen(); return; }
   info.textContent = t("berechne");
@@ -1026,7 +1019,6 @@ function aktualisiereAnsicht(zoomen) {
       info.innerHTML = `${t("naplanovano")} <b>${zastavky(anzeigen.size)}</b> · <a href="#" id="planLeeren" style="color:var(--gruen)">${t("zrusit")}</a>` +
         (anzeigen.size >= 2 ? ` · <a href="#" id="planSortieren" style="color:var(--gruen)">${t("nejkratsi")}</a>` : "") +
         `<br><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planRueck"${planZurueck ? " checked" : ""}> ${t("navrat")}</label>` +
-        `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="planFrei"${planFreistadt ? " checked" : ""}> ${t("freistadt")}</label>` +
         `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px">${t("odjezd")} <input type="time" id="planAbfahrt" value="${esc(planAbfahrt)}" style="font-size:13px;padding:2px 4px;border:1px solid #b9c5a5;border-radius:4px"></label>`;
     } else {
       info.textContent = t("planHinweis");
@@ -1051,13 +1043,6 @@ function aktualisiereAnsicht(zoomen) {
     if (rb) rb.onchange = () => {
       planZurueck = rb.checked;
       localStorage.setItem("planZurueck", planZurueck ? "1" : "0");
-      routeSig = "";
-      aktualisiereAnsicht(false);
-    };
-    const fr = info.querySelector("#planFrei");
-    if (fr) fr.onchange = () => {
-      planFreistadt = fr.checked;
-      localStorage.setItem("planFreistadt", planFreistadt ? "1" : "0");
       routeSig = "";
       aktualisiereAnsicht(false);
     };

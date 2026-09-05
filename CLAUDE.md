@@ -51,9 +51,9 @@ Pořadí se mění přetažením karty za úchyt ⠿ (pointer events na `documen
 capture na úchytu nejde, přesun v DOM by ho zrušil). Trasa přes veřejný OSRM
 (`router.project-osrm.org`): route s `annotations=duration` pro značky povinné
 pauzy po 4:30 jízdy, trip pro „nejkratší pořadí". Start je Krtely 70 (Nominatim,
-cache `startPos`); volby: návrat do Krtel (výchozí ano) a průjezd přes Wullowitz
-(„přes Freistadt", výchozí ano — jinak OSRM vede z Linze přes Bad Leonfelden).
-Průjezdní body nejsou cíle (`ziel: false`) — úseky se pro dojezdy slučují.
+cache `startPos`, napevno i v kódu); volba: návrat do Krtel (výchozí ano). Dřívější
+průjezdní bod „přes Freistadt" byl odstraněn (OSRM už vede přes S10 sám); struktura
+`ziel: false/true` pro slučování úseků zůstala.
 Výběr je po druzích ovoce (klíč `geoKey§druh`), karta zastávky ukazuje rozpis druhů
 se zaškrtávátky. V plánovači jsou na mapě všechny nedoručené zastávky: nevybrané jako
 poloprůhlední kandidáti (`.marker-kreis.kandidat`), bublina `planPopupHtml` má zaškrtávátka
