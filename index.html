@@ -727,11 +727,11 @@ async function routeLaden(ziele) {
 function pausenMarkieren() {
   const coords = letzteRoute.geometry.coordinates; // [lon, lat]
   const segDur = letzteRoute.legs.flatMap(l => (l.annotation && l.annotation.duration) || []);
-  let t = 0, dalsi = PAUSE_SEK, nr = 1;
+  let zeit = 0, dalsi = PAUSE_SEK, nr = 1;
   for (let j = 0; j < segDur.length && j + 1 < coords.length; j++) {
-    t += segDur[j];
-    while (t >= dalsi) {
-      const podil = segDur[j] ? 1 - (t - dalsi) / segDur[j] : 0;
+    zeit += segDur[j];
+    while (zeit >= dalsi) {
+      const podil = segDur[j] ? 1 - (zeit - dalsi) / segDur[j] : 0;
       const a = coords[j], b = coords[j + 1];
       const lat = a[1] + (b[1] - a[1]) * podil;
       const lon = a[0] + (b[0] - a[0]) * podil;
