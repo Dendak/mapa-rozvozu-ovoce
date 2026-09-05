@@ -55,7 +55,10 @@ cache `startPos`); volby: návrat do Krtel (výchozí ano) a průjezd přes Wull
 („přes Freistadt", výchozí ano — jinak OSRM vede z Linze přes Bad Leonfelden).
 Průjezdní body nejsou cíle (`ziel: false`) — úseky se pro dojezdy slučují.
 Výběr je po druzích ovoce (klíč `geoKey§druh`), karta zastávky ukazuje rozpis druhů
-se zaškrtávátky. Odjezd z Krtel (`planAbfahrt`, localStorage) → odhad příjezdů na
+se zaškrtávátky. V plánovači jsou na mapě všechny nedoručené zastávky: nevybrané jako
+poloprůhlední kandidáti (`.marker-kreis.kandidat`), bublina `planPopupHtml` má zaškrtávátka
+`input[data-klic]` obsluhovaná delegovaně na `document` (Leaflet obsah bubliny znovu
+vytváří, přímé onchange se ztrácí); otevřená bublina (`popupOffen`) přežije překreslení. Odjezd z Krtel (`planAbfahrt`, localStorage) → odhad příjezdů na
 zastávky: jízda + 45 min za každou pauzu (po 4:30) + `ENTLADE_MIN` (15) za zastávku.
 
 ## Seznam zastávek

@@ -121,6 +121,9 @@
     box-shadow: 0 1px 4px rgba(0,0,0,.35); width: max-content;
   }
   .marker-kreis.erledigt { opacity: .92; }
+  .marker-kreis.kandidat { opacity: .5; border-style: dashed; }
+  .popup-lief label.pw { display: flex; align-items: center; gap: 6px; margin: 4px 0; cursor: pointer; }
+  .popup-lief label.pw input { accent-color: var(--gruen); width: 15px; height: 15px; margin: 0; }
   .popup-lief { font-size: 13px; }
   .popup-lief h3 { margin: 0 0 6px; font-size: 15px; }
   .popup-lief table { border-collapse: collapse; }
@@ -224,12 +227,12 @@ const TEXTE = {
     celkem: "Celkem", stopps: n => n === 1 ? "1 zastávka" : (n >= 2 && n <= 4 ? n + " zastávky" : n + " zastávek"),
     nichts: "Ve výběru nic není.", naplanovano: "Naplánováno:", zrusit: "zrušit výběr", nejkratsi: "🔀 nejkratší pořadí",
     navrat: "s návratem do Krtel", freistadt: "přes Freistadt (S10), ne Bad Leonfelden", odjezd: "🕖 Odjezd z Krtel",
-    planHinweis: "Zaškrtněte u zastávek druhy ovoce, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Pořadí pak změníte přetažením karty za ⠿, u každé zastávky uvidíte odhad příjezdu.",
+    planHinweis: "Zaškrtněte u zastávek druhy ovoce, které chcete vzít na cestu – mapa, součty a trasa ukážou jen ty. Zaškrtávat jde i přímo v mapě – klikněte na bledý bod. Pořadí pak změníte přetažením karty za ⠿, u každé zastávky uvidíte odhad příjezdu.",
     mengeUnbekannt: "množství zatím neznámé", waze: "🧭 Waze", popupWaze: "🧭 Navigovat ve Waze",
     versteckt: n => `… ${n} ${n === 1 ? "zastávka neodpovídá" : (n <= 4 ? "zastávky neodpovídají" : "zastávek neodpovídá")} hledání`,
     heim: "🏠 Zpět do Krtel", griffTitel: "táhnutím změníte pořadí",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – zkontrolujte prosím zápis v Excelu`, obst: "Ovoce",
-    storno: "Zrušené objednávky",
+    storno: "Zrušené objednávky", planKlick: "Zaškrtněte, co vezmete:",
   },
   de: {
     titel: "Obst-Lieferkarte",
@@ -252,12 +255,12 @@ const TEXTE = {
     celkem: "Gesamt", stopps: n => n === 1 ? "1 Stopp" : n + " Stopps",
     nichts: "Nichts in der Auswahl.", naplanovano: "Geplant:", zrusit: "Auswahl löschen", nejkratsi: "🔀 kürzeste Reihenfolge",
     navrat: "mit Rückfahrt nach Krtely", freistadt: "über Freistadt (S10), nicht Bad Leonfelden", odjezd: "🕖 Abfahrt in Krtely",
-    planHinweis: "Bei den Stopps die Obstsorten anhaken, die auf die Tour mitkommen – Karte, Summen und Route zeigen nur diese. Die Reihenfolge ändert man durch Ziehen der Karte am ⠿, bei jedem Stopp erscheint die geschätzte Ankunft.",
+    planHinweis: "Bei den Stopps die Obstsorten anhaken, die auf die Tour mitkommen – Karte, Summen und Route zeigen nur diese. Anhaken geht auch direkt in der Karte – auf einen blassen Punkt klicken. Die Reihenfolge ändert man durch Ziehen der Karte am ⠿, bei jedem Stopp erscheint die geschätzte Ankunft.",
     mengeUnbekannt: "Menge noch unbekannt", waze: "🧭 Waze", popupWaze: "🧭 Mit Waze navigieren",
     versteckt: n => `… ${n} Stopp${n === 1 ? " passt" : "s passen"} nicht zur Suche`,
     heim: "🏠 Zurück nach Krtely", griffTitel: "Ziehen ändert die Reihenfolge",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – bitte Eintrag in Excel prüfen`, obst: "Obst",
-    storno: "Stornierte Bestellungen",
+    storno: "Stornierte Bestellungen", planKlick: "Anhaken, was mitkommt:",
   },
 };
 // názvy ovoce z Excelu (německy) pro českou verzi
@@ -345,6 +348,7 @@ let planAbfahrt = localStorage.getItem("planAbfahrt") || "07:00"; // odjezd z Kr
 const ENTLADE_MIN = 15; // odhad vykládky na zastávce (pro časy příjezdů)
 let letzteOrte = new Map();
 let suchText = ""; // filtr seznamu zastávek (jen seznam, mapa a součty zůstávají)
+let popupOffen = null; // klíč zastávky s otevřenou bublinou v plánovači (přežije překreslení)
 
 // telefonní čísla v poznámce jako odkazy tel:
 function notizHtml(t) {
@@ -929,11 +933,16 @@ function aktualisiereAnsicht(zoomen) {
   document.getElementById("summenTitel").textContent = planModus ? t("summenPlan") : t("summenAuswahl");
 
   // --- markery ---
+  // V plánovači jsou na mapě všechny nedoručené zastávky: vybrané plně s číslem pořadí,
+  // nevybrané jako poloprůhlední kandidáti; bublina má zaškrtávátka druhů (výběr přímo v mapě).
+  const wiederOeffnen = popupOffen;
   markerGruppe.clearLayers();
   const punkte = [];
-  let planNr = 0;
-  for (const [key, { pos, zeilen: zl }] of anzeigen) {
-    planNr++;
+  for (const [key, o] of (planModus ? orte : anzeigen)) {
+    const imPlan = !planModus || anzeigen.has(key);
+    const { pos } = o;
+    const zl = planModus && imPlan ? anzeigen.get(key).zeilen : o.zeilen;
+    const planNr = planModus ? planKeys.indexOf(key) + 1 : 0;
     const gesamt = zl.reduce((s, z) => s + z.menge, 0);
     const erledigt = zl.every(z => z.geliefert === true);
     // množství po druzích ovoce (pořadí = pořadí v tabulce)
@@ -961,15 +970,23 @@ function aktualisiereAnsicht(zoomen) {
     const groesse = Math.max(mehrsortig ? 44 : 34, Math.min(64, 26 + Math.sqrt(gesamt) * 1.1));
     const icon = L.divIcon({
       className: "marker-label",
-      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}" style="width:${groesse}px;height:${groesse}px;background:${hintergrund}">${erledigt ? "✓ " : ""}${inhalt}${planModus ? `<span class="marker-nr">${planNr}</span>` : ""}</div>`,
+      html: `<div class="marker-kreis${erledigt ? " erledigt" : ""}${planModus && !imPlan ? " kandidat" : ""}" style="width:${groesse}px;height:${groesse}px;background:${hintergrund}">${erledigt ? "✓ " : ""}${inhalt}${planModus && imPlan ? `<span class="marker-nr">${planNr}</span>` : ""}</div>`,
       iconSize: [groesse, groesse], iconAnchor: [groesse / 2, groesse / 2]
     });
-    const m = L.marker([pos.lat, pos.lon], { icon }).addTo(markerGruppe);
-    m.bindPopup(popupHtml(zl, gesamt, pos), { maxWidth: 340 });
+    const m = L.marker([pos.lat, pos.lon], { icon, zIndexOffset: imPlan ? 100 : 0 }).addTo(markerGruppe);
+    if (planModus) {
+      m.bindPopup(planPopupHtml(o, key), { maxWidth: 340 });
+      m.on("popupopen", () => { popupOffen = key; }); // zaškrtávátka obsluhuje delegovaný posluchač níže
+      m.on("popupclose", () => { if (popupOffen === key) popupOffen = null; });
+    } else {
+      m.bindPopup(popupHtml(zl, gesamt, pos), { maxWidth: 340 });
+    }
     orte.get(key).marker = m; // kliknutí v seznamu otevře bublinu
-    punkte.push([pos.lat, pos.lon]);
+    if (imPlan || !anzeigen.size) punkte.push([pos.lat, pos.lon]);
   }
   if (zoomen && punkte.length) karte.fitBounds(punkte, { padding: [50, 50], maxZoom: 12, animate: false });
+  // bublina otevřená před překreslením zůstane otevřená (zaškrtávání v mapě)
+  if (wiederOeffnen && orte.get(wiederOeffnen)?.marker) orte.get(wiederOeffnen).marker.openPopup();
 
   // --- trasa plánovače ---
   if (planModus) routeAktualisieren(planKeys.map(k => orte.get(k).pos));
@@ -1186,6 +1203,30 @@ function aktualisiereAnsicht(zoomen) {
   } else fb.style.display = "none";
 }
 
+// Bublina v plánovači: zaškrtávátka druhů ovoce dané zastávky (výběr přímo v mapě)
+function planPopupHtml(o, key) {
+  const z0 = o.zeilen[0];
+  const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
+  const namen = [...new Set(o.zeilen.map(z => z.kunde).filter(Boolean))].join(" / ") || adr;
+  const proObst = new Map();
+  for (const z of o.zeilen) {
+    const e = proObst.get(z.obst) || { kg: 0, eur: 0 };
+    e.kg += z.menge; e.eur += z.summe || 0;
+    proObst.set(z.obst, e);
+  }
+  let html = `<div class="popup-lief"><h3>${esc(namen)}</h3><div style="color:#555;margin-bottom:6px">${esc(adr)}</div>`;
+  html += `<div style="font-size:12px;color:#666">${t("planKlick")}</div>`;
+  for (const [obst, e] of proObst) {
+    const klic = key + "§" + obst;
+    html += `<label class="pw"><input type="checkbox" data-klic="${esc(klic)}"${planAuswahl.includes(klic) ? " checked" : ""}>` +
+      `<span class="punkt" style="background:${farbeFuer(obst)}"></span>${esc(obstName(obst))} · ${fmtKg(e.kg)}${e.eur ? " · " + fmtEur(e.eur) : ""}</label>`;
+  }
+  const notizen = [...new Set(o.zeilen.map(z => z.notiz).filter(Boolean))];
+  for (const n of notizen) html += `<div style="color:#777;font-style:italic;font-size:12px">📝 ${notizHtml(n)}</div>`;
+  html += `<div style="margin-top:8px"><a class="nav" href="${navUrl(o.pos)}" target="_blank" rel="noopener">${t("popupWaze")}</a></div></div>`;
+  return html;
+}
+
 function popupHtml(zl, gesamt, pos) {
   const z0 = zl[0];
   const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
@@ -1253,6 +1294,17 @@ document.getElementById("kartenToggle").onclick = (ev) => {
   ev.currentTarget.textContent = nurKarte ? t("liste") : t("nurKarte");
   setTimeout(() => karte.invalidateSize(), 50);
 };
+// zaškrtávátka v bublinách plánovače: delegovaně (Leaflet obsah bubliny znovu vytváří, přímé onchange by se ztratilo)
+document.addEventListener("change", (ev) => {
+  const cb = ev.target;
+  if (!(cb instanceof HTMLInputElement) || !cb.dataset.klic) return;
+  const klic = cb.dataset.klic;
+  if (cb.checked) { if (!planAuswahl.includes(klic)) planAuswahl.push(klic); }
+  else planAuswahl = planAuswahl.filter(k => k !== klic);
+  planSpeichern();
+  routeSig = "";
+  aktualisiereAnsicht(false);
+});
 document.querySelectorAll("#sprachen button").forEach(b => { b.onclick = () => spracheSetzen(b.dataset.l); });
 letzterStatus = ["statusLeer"];
 statischeTexte();
