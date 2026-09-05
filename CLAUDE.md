@@ -56,7 +56,7 @@ zastávky: jízda + 45 min za každou pauzu (po 4:30) + `ENTLADE_MIN` (15) za za
 
 Karta = jedna adresa (geoKey), sloučené řádky. Ukazuje poznámky (📝, `notizHtml`
 dělá z telefonů odkazy `tel:`, slova Urlaub/dovolená/! zvýrazní červeně) a odkaz
-🧭 navigovat (Google Maps dir na souřadnice). Klik na kartu = zoom + otevření
+🧭 Waze (waze.com/ul deep link na souřadnice). Klik na kartu = zoom + otevření
 bubliny (marker uložen v `orte.get(key).marker`). Hledání `#suche` filtruje jen
 seznam, mapa/součty/trasa zůstávají. Mobil (≤700 px): tlačítko `#kartenToggle`
 přepíná `body.nur-karte` (skryje panel, mapa přes celou obrazovku).

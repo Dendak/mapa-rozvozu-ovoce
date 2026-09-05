@@ -235,7 +235,7 @@ let suchText = ""; // filtr seznamu zastávek (jen seznam, mapa a součty zůst�
 function notizHtml(t) {
   return esc(t).replace(/(\+?\d[\d\s\/-]{6,}\d)/g, m => `<a class="tel" href="tel:${m.replace(/[\s\/-]/g, "")}">${m}</a>`);
 }
-function navUrl(pos) { return `https://www.google.com/maps/dir/?api=1&destination=${pos.lat},${pos.lon}`; }
+function navUrl(pos) { return `https://waze.com/ul?ll=${pos.lat},${pos.lon}&navigate=yes`; } // Waze: na mobilu otevře rovnou navigaci
 function fmtUhr(min) {
   const m = Math.round(min) % (24 * 60);
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -1056,7 +1056,7 @@ function aktualisiereAnsicht(zoomen) {
     const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc([...new Set(o.zeilen.map(z => z.kunde).filter(Boolean))].join(" / ") || adr)}</b>` +
       `<span class="grau">${esc(adr)}</span>` +
       `<span class="grau"> · ${kg ? fmtKg(kg) : "množství zatím neznámé"}${eur ? " · " + fmtEur(eur) : ""}</span>` +
-      ` <a class="nav" href="${navUrl(o.pos)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🧭 navigovat</a>` +
+      ` <a class="nav" href="${navUrl(o.pos)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🧭 Waze</a>` +
       notizen.map(n => `<span class="notiz${/urlaub|dovolen|nicht|!/i.test(n) ? " warn" : ""}">📝 ${notizHtml(n)}</span>`).join("");
     if (planModus) {
       const w = document.createElement("div");
@@ -1172,7 +1172,7 @@ function popupHtml(zl, gesamt, pos) {
   }
   if (zl.length > 1) html += `<tr class="sum"><td colspan="4">Celkem</td><td style="text-align:right">${fmtKg(gesamt)}</td><td style="text-align:right">${gesEur ? fmtEur(gesEur) : ""}</td></tr>`;
   html += `</table>`;
-  if (pos) html += `<div style="margin-top:8px"><a class="nav" href="${navUrl(pos)}" target="_blank" rel="noopener">🧭 Navigovat (Google Maps)</a></div>`;
+  if (pos) html += `<div style="margin-top:8px"><a class="nav" href="${navUrl(pos)}" target="_blank" rel="noopener">🧭 Navigovat ve Waze</a></div>`;
   html += `</div>`;
   return html;
 }
