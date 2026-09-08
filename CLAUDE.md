@@ -30,9 +30,12 @@ v Rakousku a data vede v Excelu.
 ## Formát Obst.xlsx (formát A)
 
 Bez hlavičky sloupců; list `Tabelle1`:
-| A | B | C | D | E | F | G |
-|---|---|---|---|---|---|---|
-| Geliefert (TRUE/FALSE) | jméno zákazníka | množství kg | €/kg | součet € | adresa (volný text) | poznámka |
+| A | B | C | D | E | F | G | H |
+|---|---|---|---|---|---|---|---|
+| Geliefert (TRUE/FALSE) | jméno zákazníka | množství kg | €/kg | součet € | adresa (volný text) | poznámka | Geliefert am (datum doručení) |
+
+- Sloupec H: při označení doručení zapsat i datum (app ho ukáže na kartě „doručeno d. m. rrrr“
+  a v bublině). Data do 8. 9. 2026 doplněna zpětně z historie gitu (± den u starších).
 
 - Řádek, kde je v B název ovoce a chybí množství i adresa = nadpis bloku (druh ovoce).
 - Součtové a prázdné řádky se přeskakují (bez jména a adresy).

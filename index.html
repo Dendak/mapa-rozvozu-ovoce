@@ -232,7 +232,7 @@ const TEXTE = {
     versteckt: n => `… ${n} ${n === 1 ? "zastávka neodpovídá" : (n <= 4 ? "zastávky neodpovídají" : "zastávek neodpovídá")} hledání`,
     heim: "🏠 Zpět do Krtel", griffTitel: "táhnutím změníte pořadí",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – zkontrolujte prosím zápis v Excelu`, obst: "Ovoce",
-    storno: "Zrušené objednávky", planKlick: "Zaškrtněte, co vezmete:",
+    storno: "Zrušené objednávky", planKlick: "Zaškrtněte, co vezmete:", geliefertAm: "doručeno",
   },
   de: {
     titel: "Obst-Lieferkarte",
@@ -260,7 +260,7 @@ const TEXTE = {
     versteckt: n => `… ${n} Stopp${n === 1 ? " passt" : "s passen"} nicht zur Suche`,
     heim: "🏠 Zurück nach Krtely", griffTitel: "Ziehen ändert die Reihenfolge",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – bitte Eintrag in Excel prüfen`, obst: "Obst",
-    storno: "Stornierte Bestellungen", planKlick: "Anhaken, was mitkommt:",
+    storno: "Stornierte Bestellungen", planKlick: "Anhaken, was mitkommt:", geliefertAm: "geliefert",
   },
 };
 // názvy ovoce z Excelu (německy) pro českou verzi
@@ -506,6 +506,7 @@ function parseObstListe(arr, blattName, obstStart, zeilen) {
       summe: parseMenge(row[4]) || null,
       notiz: putz(row[6]),
       geliefert: istWahr(row[0]),
+      geliefertAm: row[7] !== "" && row[7] != null ? parseDatum(row[7]) : null, // sloupec H: kdy doručeno
     };
     z.storno = /^\s*(storn|zruš)/i.test(z.notiz); // zrušená objednávka: mimo součty a mapu, v seznamu přeškrtnutá
     extrahujKoord(z);
@@ -883,6 +884,7 @@ function gefiltert() {
 function fmtDatum(d) {
   return d ? d.toLocaleDateString(LOC(), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) : "";
 }
+function fmtKurzDatum(d) { return d.toLocaleDateString(LOC(), { day: "numeric", month: "numeric", year: "numeric" }); }
 function fmtKg(n) { return n.toLocaleString(LOC()) + " kg"; }
 function fmtEur(n) { return n.toLocaleString(LOC(), { maximumFractionDigits: 0 }) + " €"; }
 function zastavky(n) { return t("stopps", n); }
@@ -1071,7 +1073,9 @@ function aktualisiereAnsicht(zoomen) {
     const d = document.createElement("div");
     const imPlan = planKeys.includes(o.key);
     d.className = "stopp" + (erledigt ? " erledigt" : "") + (planModus ? " mit-cb" + (imPlan ? " im-plan" : "") : "");
-    const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc([...new Set(o.zeilen.map(z => z.kunde).filter(Boolean))].join(" / ") || adr)}</b>` +
+    const daten = [...new Set(o.zeilen.filter(z => z.geliefert && z.geliefertAm).map(z => fmtKurzDatum(z.geliefertAm)))];
+    const inhalt = `<b>${erledigt ? '<span class="haken">✓</span> ' : ""}${esc([...new Set(o.zeilen.map(z => z.kunde).filter(Boolean))].join(" / ") || adr)}` +
+      (daten.length ? ` <span class="haken" style="font-weight:400;font-size:12px">${t("geliefertAm")} ${daten.join(", ")}</span>` : "") + `</b>` +
       `<span class="grau">${esc(adr)}</span>` +
       `<span class="grau"> · ${kg ? fmtKg(kg) : t("mengeUnbekannt")}${eur ? " · " + fmtEur(eur) : ""}</span>` +
       ` <a class="nav" href="${navUrl(o.pos)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t("waze")}</a>` +
@@ -1224,7 +1228,7 @@ function popupHtml(zl, gesamt, pos) {
     const statusZelle = z.geliefert === undefined ? "" :
       (z.geliefert ? '<span class="haken">✓</span>' : '<span class="offen-punkt">●</span>');
     html += `<tr>`;
-    if (statusZelle) html += `<td>${statusZelle}</td>`;
+    if (statusZelle) html += `<td>${statusZelle}${z.geliefert && z.geliefertAm ? ` <span style="color:#2e7d32;font-size:11px;white-space:nowrap">${fmtKurzDatum(z.geliefertAm)}</span>` : ""}</td>`;
     if (!einKunde) html += `<td>${esc(z.kunde)}</td>`;
     if (z.datum) html += `<td>${esc(fmtDatum(z.datum))}</td>`;
     html += `<td><span class="punkt" style="background:${farbeFuer(z.obst)};margin-right:4px;vertical-align:-1px"></span>${esc(obstName(z.obst))}</td>`;
