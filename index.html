@@ -48,6 +48,7 @@
   table.summen { width: 100%; border-collapse: collapse; font-size: 14px; }
   table.summen td { padding: 3px 0; }
   table.summen td.z { text-align: right; font-weight: 600; white-space: nowrap; padding-left: 8px; }
+  table.summen td.avg { font-weight: 400; color: #777; font-size: 11.5px; }
   #stopps { font-size: 13px; }
   .stopp { padding: 7px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
   .stopp:hover { background: #e8eedb; border-color: #cdd8b8; }
@@ -991,24 +992,32 @@ function aktualisiereAnsicht(zoomen) {
   const summen = {};
   const zeilenSumme = planModus ? [...anzeigen.values()].flatMap(o => o.zeilen) : zeilen;
   for (const z of zeilenSumme) {
-    if (!summen[z.obst]) summen[z.obst] = { kg: 0, eur: 0 };
+    if (!summen[z.obst]) summen[z.obst] = { kg: 0, eur: 0, kgMitPreis: 0 };
     summen[z.obst].kg += z.menge;
     summen[z.obst].eur += z.summe || 0;
+    if (z.summe) summen[z.obst].kgMitPreis += z.menge; // pro průměr €/kg jen naceněné řádky
   }
+  // průměrná cena za kg v € (a Kč), jen z naceněných řádků
+  const avgHtml = (eur, kg) => {
+    if (!eur || !kg) return `<td class="z avg"></td>`;
+    const e = eur / kg;
+    return `<td class="z avg">${e.toLocaleString(LOC(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/kg` +
+      (kurzCZK ? `<br>${(e * kurzCZK).toLocaleString(LOC(), { maximumFractionDigits: 1 })} Kč/kg` : "") + `</td>`;
+  };
   const tabelle = document.getElementById("summen");
   tabelle.innerHTML = "";
-  let gKg = 0, gEur = 0;
+  let gKg = 0, gEur = 0, gKgMitPreis = 0;
   const hatEur = zeilenSumme.some(z => z.summe);
   for (const [obst, s] of Object.entries(summen).sort()) {
-    gKg += s.kg; gEur += s.eur;
+    gKg += s.kg; gEur += s.eur; gKgMitPreis += s.kgMitPreis;
     tabelle.insertAdjacentHTML("beforeend",
-      `<tr><td><span class="punkt" style="background:${farbeFuer(obst)};margin-right:6px;vertical-align:-1px"></span>${esc(obstName(obst))}</td><td class="z">${fmtKg(s.kg)}</td>${hatEur ? `<td class="z">${fmtEur(s.eur)}</td>` : ""}</tr>`);
+      `<tr><td><span class="punkt" style="background:${farbeFuer(obst)};margin-right:6px;vertical-align:-1px"></span>${esc(obstName(obst))}</td><td class="z">${fmtKg(s.kg)}</td>${hatEur ? `<td class="z">${fmtEur(s.eur)}</td>${avgHtml(s.eur, s.kgMitPreis)}` : ""}</tr>`);
   }
   tabelle.insertAdjacentHTML("beforeend",
-    `<tr style="border-top:1px solid #b9c5a5"><td><b>${t("celkem")} · ${zastavky(anzeigen.size)}</b></td><td class="z">${fmtKg(gKg)}</td>${hatEur ? `<td class="z">${fmtEur(gEur)}</td>` : ""}</tr>`);
+    `<tr style="border-top:1px solid #b9c5a5"><td><b>${t("celkem")} · ${zastavky(anzeigen.size)}</b></td><td class="z">${fmtKg(gKg)}</td>${hatEur ? `<td class="z">${fmtEur(gEur)}</td>${avgHtml(gEur, gKgMitPreis)}` : ""}</tr>`);
   if (hatEur && kurzCZK && gEur) {
     tabelle.insertAdjacentHTML("beforeend",
-      `<tr><td colspan="3" style="text-align:right;color:#555;font-size:12.5px;padding-top:2px">≈ <b>${Math.round(gEur * kurzCZK).toLocaleString(LOC())} Kč</b> <span style="color:#999">(${kurzCZK.toLocaleString(LOC(), { maximumFractionDigits: 3 })} Kč/€ · ${kurzZdroj})</span></td></tr>`);
+      `<tr><td colspan="4" style="text-align:right;color:#555;font-size:12.5px;padding-top:2px">≈ <b>${Math.round(gEur * kurzCZK).toLocaleString(LOC())} Kč</b> <span style="color:#999">(${kurzCZK.toLocaleString(LOC(), { maximumFractionDigits: 3 })} Kč/€ · ${kurzZdroj})</span></td></tr>`);
   }
 
   // --- seznam zastávek ---
