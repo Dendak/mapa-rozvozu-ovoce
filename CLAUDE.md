@@ -77,8 +77,10 @@ přepíná `body.nur-karte` (skryje panel, mapa přes celou obrazovku).
 
 - Vše v jednom `index.html`, žádné závislosti kromě CDN (Leaflet, SheetJS). Žádný build.
 - UI texty dvojjazyčně; názvy ovoce se poznávají česky i německy (regexy `farbeFuer`, `OBST_MUSTER`).
-  `farbeFuer` rozlišuje i odrůdy hrušek: Williams žlutozelená `#bda30c`, Packham zelená `#4e8c2b`,
-  ostatní hrušky `#7a9a01`. Nová odrůda = přidat větev tam a překlad do `OBST_CS`.
+  `farbeFuer` rozlišuje i odrůdy hrušek: Williams zlatožlutá `#c9a227`, Packham jablkově zelená
+  `#8db600`, ostatní hrušky `#7a9a01`. Nová odrůda = přidat větev tam a překlad do `OBST_CS`.
+  **Pozor:** doručené zastávky mají marker `#2e7d32` (tmavá zelená) — barva druhu nesmí být blízko,
+  jinak nejde poznat, jestli je bod zelený kvůli druhu, nebo kvůli doručení.
 - `fitBounds` volat s `animate: false` (animace se ruší při překreslování markerů).
 - Do repa nikdy nepřidávat zálohy ani jiné soubory s daty zákazníků nad rámec `Obst.xlsx`.
 - Na PC majitele existuje mimo git `aktualizovat-web.cmd` (kopie Obst.xlsx z OneDrive + commit + push)
