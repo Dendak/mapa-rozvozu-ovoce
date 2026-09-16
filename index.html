@@ -328,7 +328,11 @@ function farbeFuer(obst) {
   const s = String(obst || "").toLowerCase();
   if (/^(weichsel|kirsch|višn|visn|třešn|tresn)/.test(s)) return "#8e1b3a";
   if (/^(zwetschk|pflaume|švestk|svestk)/.test(s)) return "#5b3d8f";
-  if (/^(birne|hrušk|hrusk)/.test(s)) return "#7a9a01";
+  if (/^(birne|hrušk|hrusk)/.test(s)) {           // odrůdy hrušek: odlišné odstíny, ale pořád „hruškové"
+    if (/williams/.test(s)) return "#bda30c";     // Williams: žlutozelená
+    if (/packham/.test(s)) return "#4e8c2b";      // Packham: zelená
+    return "#7a9a01";
+  }
   if (/^(apfel|äpfel|jablk)/.test(s)) return "#cc2b2b";
   if (/^(marille|aprikose|meruňk|merunk)/.test(s)) return "#e8930c";
   if (/^(erdbeer|jahod)/.test(s)) return "#d81b60";
