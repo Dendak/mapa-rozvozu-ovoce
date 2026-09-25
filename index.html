@@ -240,7 +240,7 @@ const TEXTE = {
     heim: "🏠 Zpět do Krtel", griffTitel: "táhnutím změníte pořadí",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – zkontrolujte prosím zápis v Excelu`, obst: "Ovoce",
     storno: "Zrušené objednávky", planKlick: "Zaškrtněte, co vezmete:", geliefertAm: "doručeno",
-    jahr: "Rok", nichtGeliefert: "✗ Nedoručeno", ohneAdresse: "Bez adresy (není na mapě)", andereJahre: "Jiné roky",
+    jahr: "Rok", nichtGeliefert: "✗ Nedoručeno", ohneAdresse: "Bez adresy (není na mapě)", andereJahre: "Jiné roky", jahreAlle: "Celkem", proJahr: "Podle roků",
   },
   de: {
     titel: "Obst-Lieferkarte",
@@ -269,7 +269,7 @@ const TEXTE = {
     heim: "🏠 Zurück nach Krtely", griffTitel: "Ziehen ändert die Reihenfolge",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – bitte Eintrag in Excel prüfen`, obst: "Obst",
     storno: "Stornierte Bestellungen", planKlick: "Anhaken, was mitkommt:", geliefertAm: "geliefert",
-    jahr: "Jahr", nichtGeliefert: "✗ Nicht geliefert", ohneAdresse: "Ohne Adresse (nicht auf der Karte)", andereJahre: "Andere Jahre",
+    jahr: "Jahr", nichtGeliefert: "✗ Nicht geliefert", ohneAdresse: "Ohne Adresse (nicht auf der Karte)", andereJahre: "Andere Jahre", jahreAlle: "Gesamt", proJahr: "Nach Jahren",
   },
 };
 // názvy ovoce z Excelu (německy) pro českou verzi
@@ -358,7 +358,9 @@ let alleZeilen = []; // řádky zobrazeného roku
 // Roky: Obst.xlsx = aktuální sezóna, Obst-Vorjahre.xlsx = list na rok (2024, 2023 …)
 let aktZeilen = [], vorZeilen = [];
 let aktJahr = String(new Date().getFullYear()), jahrAuswahl = null;
-function istVorjahr() { return jahrAuswahl != null && jahrAuswahl !== aktJahr; }
+const JAHRE_ALLE = "alle"; // tlačítko „Celkem": všechny roky dohromady
+function istVorjahr() { return jahrAuswahl != null && jahrAuswahl !== aktJahr; } // i „Celkem" (bez plánovače)
+function istGesamt() { return jahrAuswahl === JAHRE_ALLE; }
 let obstAuswahl = new Set();
 let zeitModus = "alle";
 let statusModus = "offen";
@@ -906,13 +908,15 @@ function datenUebernehmen(zeilen) {
 // Přepínač roků: aktuální sezóna + roky z Obst-Vorjahre.xlsx
 function jahreAnzeigen() {
   const jahre = [...new Set([aktJahr, ...vorZeilen.map(z => z.jahr)])].sort().reverse();
+  if (jahre.length > 1) jahre.push(JAHRE_ALLE);
   if (!jahre.includes(jahrAuswahl)) jahrAuswahl = aktJahr;
   const div = document.getElementById("jahrKnoepfe");
   div.innerHTML = "";
   for (const j of jahre) {
     const b = document.createElement("button");
     b.className = "klein" + (j === jahrAuswahl ? " aktiv" : "");
-    b.textContent = j;
+    if (j === JAHRE_ALLE) { b.dataset.t = "jahreAlle"; b.textContent = t("jahreAlle"); }
+    else b.textContent = j;
     b.onclick = () => {
       if (j === jahrAuswahl) return;
       const warVorjahr = istVorjahr();
@@ -929,7 +933,10 @@ function jahreAnzeigen() {
   document.getElementById("jahrBlock").style.display = jahre.length > 1 ? "" : "none";
   datenUebernehmen(zeilenDesJahres());
 }
-function zeilenDesJahres() { return istVorjahr() ? vorZeilen.filter(z => z.jahr === jahrAuswahl) : aktZeilen; }
+function zeilenDesJahres() {
+  if (istGesamt()) return [...aktZeilen, ...vorZeilen];
+  return istVorjahr() ? vorZeilen.filter(z => z.jahr === jahrAuswahl) : aktZeilen;
+}
 function statusSetzen(s) {
   statusModus = s;
   document.querySelectorAll("#statusKnoepfe button").forEach(x => x.classList.toggle("aktiv", x.dataset.s === s));
@@ -1126,6 +1133,21 @@ function aktualisiereAnsicht(zoomen) {
     tabelle.insertAdjacentHTML("beforeend",
       `<tr><td colspan="4" style="text-align:right;color:#555;font-size:12.5px;padding-top:2px">≈ <b>${Math.round(gEur * kurzCZK).toLocaleString(LOC())} Kč</b> <span style="color:#999">(${kurzCZK.toLocaleString(LOC(), { maximumFractionDigits: 3 })} Kč/€ · ${kurzZdroj})</span></td></tr>`);
   }
+  // „Celkem": rozpis po rocích (kg, €, průměr €/kg)
+  if (istGesamt()) {
+    const proJahr = new Map();
+    for (const z of zeilenSumme) {
+      const e = proJahr.get(z.jahr) || { kg: 0, eur: 0, kgMitPreis: 0 };
+      e.kg += z.menge; e.eur += z.summe || 0;
+      if (z.summe) e.kgMitPreis += z.menge;
+      proJahr.set(z.jahr, e);
+    }
+    tabelle.insertAdjacentHTML("beforeend",
+      `<tr><td colspan="4" style="padding-top:8px;font-size:12px;color:#555"><b>📅 ${t("proJahr")}</b></td></tr>`);
+    for (const [j, e] of [...proJahr].sort((a, b) => b[0].localeCompare(a[0])))
+      tabelle.insertAdjacentHTML("beforeend",
+        `<tr style="font-size:12.5px"><td>${esc(j)}</td><td class="z">${fmtKg(e.kg)}</td>${hatEur ? `<td class="z">${fmtEur(e.eur)}</td>${avgHtml(e.eur, e.kgMitPreis)}` : ""}</tr>`);
+  }
 
   // --- seznam zastávek ---
   const liste = document.getElementById("stopps");
@@ -1195,7 +1217,7 @@ function aktualisiereAnsicht(zoomen) {
       `<span class="grau">${esc(adr)}</span>` +
       `<span class="grau"> · ${kg ? fmtKg(kg) : t("mengeUnbekannt")}${eur ? " · " + fmtEur(eur) : ""}</span>` +
       ` <a class="nav" href="${navUrl(o.pos)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t("waze")}</a>` +
-      (() => { const j = [...andereJahre(o.pos).keys()]; return j.length ? `<span class="grau" style="display:block;font-size:12px">📅 ${t("andereJahre")}: ${j.join(", ")}</span>` : ""; })() +
+      (() => { const j = [...andereJahre(o.pos).keys()]; return j.length ? `<span class="grau" style="display:block;font-size:12px">📅 ${t(istGesamt() ? "proJahr" : "andereJahre")}: ${j.join(", ")}</span>` : ""; })() +
       notizen.map(n => `<span class="notiz${/urlaub|dovolen|nicht|!/i.test(n) ? " warn" : ""}">📝 ${notizHtml(n)}</span>`).join("");
     if (planModus) {
       const w = document.createElement("div");
@@ -1358,7 +1380,8 @@ function popupHtml(zl, gesamt, pos) {
   const z0 = zl[0];
   const adr = [z0.adresse, (z0.plz + " " + z0.ort).trim()].filter(Boolean).join(", ");
   const einKunde = new Set(zl.map(z => z.kunde)).size === 1;
-  const sortiert = [...zl].sort((a, b) => (a.datum?.getTime() || 0) - (b.datum?.getTime() || 0));
+  const sortiert = [...zl].sort((a, b) => (istGesamt() ? String(b.jahr).localeCompare(String(a.jahr)) : 0) ||
+    (a.datum?.getTime() || 0) - (b.datum?.getTime() || 0));
   const gesEur = zl.reduce((s, z) => s + (z.summe || 0), 0);
   let html = `<div class="popup-lief"><h3>${esc(einKunde ? (z0.kunde || adr) : adr)}</h3>`;
   html += `<div style="color:#555;margin-bottom:6px">${esc(adr)}</div><table>`;
@@ -1367,6 +1390,7 @@ function popupHtml(zl, gesamt, pos) {
       (z.geliefert ? '<span class="haken">✓</span>' : '<span class="offen-punkt">●</span>');
     html += `<tr>`;
     if (statusZelle) html += `<td>${statusZelle}${z.geliefert && z.geliefertAm ? ` <span style="color:#2e7d32;font-size:11px;white-space:nowrap">${fmtKurzDatum(z.geliefertAm)}</span>` : ""}</td>`;
+    if (istGesamt()) html += `<td style="color:#555">${esc(z.jahr)}</td>`;
     if (!einKunde) html += `<td>${esc(z.kunde)}</td>`;
     if (z.datum) html += `<td>${esc(fmtDatum(z.datum))}</td>`;
     html += `<td><span class="punkt" style="background:${farbeFuer(z.obst)};margin-right:4px;vertical-align:-1px"></span>${esc(obstName(z.obst))}</td>`;
@@ -1374,9 +1398,9 @@ function popupHtml(zl, gesamt, pos) {
     html += `<td style="text-align:right">${z.summe ? fmtEur(z.summe) : ""}</td></tr>`;
     if (z.notiz) html += `<tr><td colspan="6" style="color:#777;font-style:italic;padding-left:18px">📝 ${notizHtml(z.notiz)}</td></tr>`;
   }
-  if (zl.length > 1) html += `<tr class="sum"><td colspan="4">${t("celkem")}</td><td style="text-align:right">${fmtKg(gesamt)}</td><td style="text-align:right">${gesEur ? fmtEur(gesEur) : ""}</td></tr>`;
+  if (zl.length > 1) html += `<tr class="sum"><td colspan="${2 + (istGesamt() ? 1 : 0) + (einKunde ? 0 : 1)}">${t("celkem")}</td><td style="text-align:right">${fmtKg(gesamt)}</td><td style="text-align:right">${gesEur ? fmtEur(gesEur) : ""}</td></tr>`;
   html += `</table>`;
-  const hist = andereJahre(pos);
+  const hist = istGesamt() ? new Map() : andereJahre(pos); // v „Celkem" mají řádky rok přímo v tabulce
   if (hist.size) {
     html += `<div style="margin-top:6px;font-size:12px;color:#555"><b>📅 ${t("andereJahre")}</b>`;
     for (const [j, m] of hist) html += `<div>${j}: ${[...m].map(([o, kg]) => `<span class="punkt" style="background:${farbeFuer(o)};vertical-align:-1px"></span> ${esc(obstName(o))} ${fmtKg(kg)}`).join(" · ")}</div>`;

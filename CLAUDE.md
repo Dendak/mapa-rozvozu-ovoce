@@ -55,6 +55,8 @@ Bez hlavičky sloupců; list `Tabelle1`:
 Blok „Rok" (jen když existuje `Obst-Vorjahre.xlsx`): aktuální sezóna (`aktJahr` = rok posledního
 data ve sloupci H, jinak letošek) + roky z listů. Předchozí rok: výchozí stav „Doručeno", tlačítko
 „Ještě rozvézt" se jmenuje „Nedoručeno", plánovač skrytý, markery v barvách druhů (ne zelené).
+Tlačítko „Celkem" (`JAHRE_ALLE`, `istGesamt()`): všechny roky dohromady, chová se jako předchozí rok
+(výchozí „Doručeno", bez plánovače); pod součty rozpis po rocích, bublina má sloupec s rokem.
 Bublina i karta ukazují „Jiné roky" — řádky ostatních roků do 300 m od zastávky (`andereJahre`).
 Geokódování běží ve frontě (`geoKette`), aby se roky nedotazovaly Nominatimu souběžně.
 
