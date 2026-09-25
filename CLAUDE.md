@@ -16,6 +16,10 @@ v Rakousku a data vede v Excelu.
   obratem přidat frázi do slovníku; locale `LOC()`.
 - `Obst.xlsx` — data rozvozu; **kopie**, originál je v OneDrive na PC majitele.
   Na web se nahrává vědomě a záměrně (majitel byl na veřejnost dat upozorněn).
+- `Obst-Vorjahre.xlsx` — předchozí roky (2021–2024), list na rok (název listu = rok, formát A).
+  Samostatný soubor záměrně: `aktualizovat-web.cmd` přepisuje jen `Obst.xlsx`. Zdroj: staré excely
+  majitele (Obst_2023/2024, „Schnautomaticky obnoveno"); neúplné, majitel doplňuje. Nejisté adresy
+  mají poznámku „Adresse angenommen", řádky bez adresy app ukáže v seznamu „Bez adresy".
 - `README.md` — popis pro návštěvníky
 
 ## Jak aplikace funguje
@@ -45,6 +49,14 @@ Bez hlavičky sloupců; list `Tabelle1`:
   `zrušeno`) — app ji vynechá ze součtů, mapy i „Ještě rozvézt“ a v režimu „Vše“ ji ukáže
   přeškrtnutou pod „Zrušené objednávky“ (kontakt na příští rok zůstane).
 - Parser podporuje i formát B (pojmenované sloupce Datum/Kunde/Adresse/PLZ/Ort/Obst/Menge/Notiz).
+
+## Roky
+
+Blok „Rok" (jen když existuje `Obst-Vorjahre.xlsx`): aktuální sezóna (`aktJahr` = rok posledního
+data ve sloupci H, jinak letošek) + roky z listů. Předchozí rok: výchozí stav „Doručeno", tlačítko
+„Ještě rozvézt" se jmenuje „Nedoručeno", plánovač skrytý, markery v barvách druhů (ne zelené).
+Bublina i karta ukazují „Jiné roky" — řádky ostatních roků do 300 m od zastávky (`andereJahre`).
+Geokódování běží ve frontě (`geoKette`), aby se roky nedotazovaly Nominatimu souběžně.
 
 ## Plánovač (režim „plan")
 
@@ -82,7 +94,8 @@ přepíná `body.nur-karte` (skryje panel, mapa přes celou obrazovku).
   **Pozor:** doručené zastávky mají marker `#2e7d32` (tmavá zelená) — barva druhu nesmí být blízko,
   jinak nejde poznat, jestli je bod zelený kvůli druhu, nebo kvůli doručení.
 - `fitBounds` volat s `animate: false` (animace se ruší při překreslování markerů).
-- Do repa nikdy nepřidávat zálohy ani jiné soubory s daty zákazníků nad rámec `Obst.xlsx`.
+- Do repa nikdy nepřidávat zálohy ani jiné soubory s daty zákazníků nad rámec `Obst.xlsx`
+  a `Obst-Vorjahre.xlsx` (výslovně odsouhlaseno majitelem).
 - Na PC majitele existuje mimo git `aktualizovat-web.cmd` (kopie Obst.xlsx z OneDrive + commit + push)
   a lokální kopie stránky `…\Desktop\Zeiterfassung\Obstlieferungen\Lieferkarte.html` —
   při změnách `index.html` připomenout, že lokální kopii je potřeba synchronizovat.
