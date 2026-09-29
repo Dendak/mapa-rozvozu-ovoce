@@ -275,6 +275,7 @@ const TEXTE = {
 // názvy ovoce z Excelu (německy) pro českou verzi
 const OBST_CS = { "Weichsel": "Višně", "Zwetschken": "Švestky", "Birnen Williams": "Hrušky Williams",
   "Birnen Packham": "Hrušky Packham", "Birnen Alexander Lucas": "Hrušky Alexander Lucas",
+  "Birnen Konference": "Hrušky Konference",
   "Äpfel": "Jablka",
   "Zwetschke": "Švestky", "Birnen": "Hrušky", "Apfel": "Jablka", "Kirschen": "Třešně", "Marillen": "Meruňky" };
 // poznámky z Excelu jsou německy – v české verzi se překládají po frázích (delší fráze mají přednost)
@@ -343,7 +344,8 @@ function farbeFuer(obst) {
   if (/^(birne|hrušk|hrusk)/.test(s)) {           // odrůdy hrušek: odlišné odstíny, ale pořád „hruškové"
     if (/williams/.test(s)) return "#c9a227";     // Williams: zlatožlutá
     if (/packham/.test(s)) return "#8db600";
-    if (/alexander|lucas/.test(s)) return "#a87428";  // Alexander Lucas: rezavě bronzová      // Packham: jablkově zelená (světlejší než „doručeno" #2e7d32)
+    if (/alexander|lucas/.test(s)) return "#6cc24a";  // Alexander Lucas: světle zelená
+    if (/konferen/.test(s)) return "#a87428";       // Konference: rezavě bronzová      // Packham: jablkově zelená (světlejší než „doručeno" #2e7d32)
     return "#7a9a01";
   }
   if (/^(apfel|äpfel|jablk)/.test(s)) return "#cc2b2b";
