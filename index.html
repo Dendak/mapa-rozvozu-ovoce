@@ -241,6 +241,8 @@ const TEXTE = {
     fehlerZeile: (n, a) => `• ${n}: „${a}" – zkontrolujte prosím zápis v Excelu`, obst: "Ovoce",
     storno: "Zrušené objednávky", planKlick: "Zaškrtněte, co vezmete:", geliefertAm: "doručeno",
     jahr: "Rok", nichtGeliefert: "✗ Nedoručeno", ohneAdresse: "Bez adresy (není na mapě)", andereJahre: "Jiné roky", jahreAlle: "Celkem", proJahr: "Podle roků",
+    domaKg: p => `doma ${p} Kč/kg`,
+    domaVergleich: (doma, plus) => `🏠 Prodej doma: ≈ ${doma} Kč · v Rakousku ${plus.startsWith("-") ? "méně" : "navíc"} <b>${plus.replace(/^[-+]/, "")} Kč</b>`,
   },
   de: {
     titel: "Obst-Lieferkarte",
@@ -270,6 +272,8 @@ const TEXTE = {
     fehlerZeile: (n, a) => `• ${n}: „${a}" – bitte Eintrag in Excel prüfen`, obst: "Obst",
     storno: "Stornierte Bestellungen", planKlick: "Anhaken, was mitkommt:", geliefertAm: "geliefert",
     jahr: "Jahr", nichtGeliefert: "✗ Nicht geliefert", ohneAdresse: "Ohne Adresse (nicht auf der Karte)", andereJahre: "Andere Jahre", jahreAlle: "Gesamt", proJahr: "Nach Jahren",
+    domaKg: p => `daheim ${p} Kč/kg`,
+    domaVergleich: (doma, plus) => `🏠 Verkauf daheim (CZ): ≈ ${doma} Kč · in Österreich ${plus.startsWith("-") ? "weniger" : "mehr"} <b>${plus.replace(/^[-+]/, "")} Kč</b>`,
   },
 };
 // názvy ovoce z Excelu (německy) pro českou verzi
@@ -355,6 +359,15 @@ function farbeFuer(obst) {
   return "#b8860b";
 }
 const FARBE_GEMISCHT = "#555555";
+// Za kolik by šlo ovoce prodat doma v ČR (Kč/kg, ceny 2026) – srovnání s rakouskou cenou v součtech
+function domaPreis(obst) {
+  const s = String(obst || "").toLowerCase();
+  if (/^(weichsel|kirsch|višn|visn|třešn|tresn)/.test(s)) return 13;
+  if (/^(zwetschk|pflaume|švestk|svestk)/.test(s)) return 9.8;
+  if (/^(birne|hrušk|hrusk)/.test(s)) return /williams/.test(s) ? 12 : 7; // Konference, Lucas, Packham: 7
+  if (/^(apfel|äpfel|jablk)/.test(s)) return 3;
+  return null;
+}
 const OBST_MUSTER = /^(weichsel|zwetschk|birne|apfel|äpfel|kirsch|marille|aprikose|pflaume|erdbeer|himbeer|nuss|walnuss|obst|višn|visn|třešn|tresn|švestk|svestk|hrušk|hrusk|jablk|meruňk|merunk|jahod|malin|ořech|orech|ovoce)/i;
 
 let karte, markerGruppe, routeGruppe;
@@ -1116,26 +1129,36 @@ function aktualisiereAnsicht(zoomen) {
     if (z.summe) summen[z.obst].kgMitPreis += z.menge; // pro průměr €/kg jen naceněné řádky
   }
   // průměrná cena za kg v € (a Kč), jen z naceněných řádků
-  const avgHtml = (eur, kg) => {
+  const avgHtml = (eur, kg, doma) => {
     if (!eur || !kg) return `<td class="z avg"></td>`;
     const e = eur / kg;
     return `<td class="z avg">${e.toLocaleString(LOC(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/kg` +
-      (kurzCZK ? `<br>${(e * kurzCZK).toLocaleString(LOC(), { maximumFractionDigits: 1 })} Kč/kg` : "") + `</td>`;
+      (kurzCZK ? `<br>${(e * kurzCZK).toLocaleString(LOC(), { maximumFractionDigits: 1 })} Kč/kg` : "") +
+      (kurzCZK && doma ? `<br><span style="color:${e * kurzCZK >= doma ? "#2e7d32" : "#c62828"}">${t("domaKg", doma.toLocaleString(LOC()))}</span>` : "") + `</td>`;
   };
+  let domaKc = 0, domaEur = 0; // srovnání s prodejem doma: jen naceněné řádky druhů s domácí cenou
   const tabelle = document.getElementById("summen");
   tabelle.innerHTML = "";
   let gKg = 0, gEur = 0, gKgMitPreis = 0;
   const hatEur = zeilenSumme.some(z => z.summe);
   for (const [obst, s] of Object.entries(summen).sort()) {
     gKg += s.kg; gEur += s.eur; gKgMitPreis += s.kgMitPreis;
+    const doma = domaPreis(obst);
+    if (doma && s.kgMitPreis) { domaKc += s.kgMitPreis * doma; domaEur += s.eur; }
     tabelle.insertAdjacentHTML("beforeend",
-      `<tr><td><span class="punkt" style="background:${farbeFuer(obst)};margin-right:6px;vertical-align:-1px"></span>${esc(obstName(obst))}</td><td class="z">${fmtKg(s.kg)}</td>${hatEur ? `<td class="z">${fmtEur(s.eur)}</td>${avgHtml(s.eur, s.kgMitPreis)}` : ""}</tr>`);
+      `<tr><td><span class="punkt" style="background:${farbeFuer(obst)};margin-right:6px;vertical-align:-1px"></span>${esc(obstName(obst))}</td><td class="z">${fmtKg(s.kg)}</td>${hatEur ? `<td class="z">${fmtEur(s.eur)}</td>${avgHtml(s.eur, s.kgMitPreis, doma)}` : ""}</tr>`);
   }
   tabelle.insertAdjacentHTML("beforeend",
     `<tr style="border-top:1px solid #b9c5a5"><td><b>${t("celkem")} · ${zastavky(anzeigen.size)}</b></td><td class="z">${fmtKg(gKg)}</td>${hatEur ? `<td class="z">${fmtEur(gEur)}</td>${avgHtml(gEur, gKgMitPreis)}` : ""}</tr>`);
   if (hatEur && kurzCZK && gEur) {
     tabelle.insertAdjacentHTML("beforeend",
       `<tr><td colspan="4" style="text-align:right;color:#555;font-size:12.5px;padding-top:2px">≈ <b>${Math.round(gEur * kurzCZK).toLocaleString(LOC())} Kč</b> <span style="color:#999">(${kurzCZK.toLocaleString(LOC(), { maximumFractionDigits: 3 })} Kč/€ · ${kurzZdroj})</span></td></tr>`);
+  }
+  if (hatEur && kurzCZK && domaKc) {
+    const plus = Math.round(domaEur * kurzCZK - domaKc);
+    tabelle.insertAdjacentHTML("beforeend",
+      `<tr><td colspan="4" style="text-align:right;color:#555;font-size:12.5px">${t("domaVergleich",
+        Math.round(domaKc).toLocaleString(LOC()), (plus < 0 ? "-" : "+") + Math.abs(plus).toLocaleString(LOC()))}</td></tr>`);
   }
   // „Celkem": rozpis po rocích (kg, €, průměr €/kg)
   if (istGesamt()) {

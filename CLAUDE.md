@@ -60,6 +60,13 @@ Tlačítko „Celkem" (`JAHRE_ALLE`, `istGesamt()`): všechny roky dohromady, ch
 Bublina i karta ukazují „Jiné roky" — řádky ostatních roků do 300 m od zastávky (`andereJahre`).
 Geokódování běží ve frontě (`geoKette`), aby se roky nedotazovaly Nominatimu souběžně.
 
+## Srovnání s prodejem doma
+
+`domaPreis(obst)` = za kolik by šlo ovoce prodat v ČR (Kč/kg, ceny 2026 od majitele): višně 13,
+švestky 9,80, Williams 12, ostatní hrušky (Konference, Lucas, Packham) 7, jablka 3. V součtech
+u druhu „doma X Kč/kg" (zeleně, když je Rakousko dráž) a řádek „Prodej doma ≈ … · v Rakousku navíc …"
+(jen naceněné řádky; doprava se nepočítá). Nové ceny = upravit `domaPreis`.
+
 ## Plánovač (režim „plan")
 
 Čtvrté tlačítko ve Stavu rozvozu. Zaškrtnuté nedoručené zastávky (klíč = geoKey,
