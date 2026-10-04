@@ -240,7 +240,7 @@ const TEXTE = {
     heim: "🏠 Zpět do Krtel", griffTitel: "táhnutím změníte pořadí",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – zkontrolujte prosím zápis v Excelu`, obst: "Ovoce",
     storno: "Zrušené objednávky", planKlick: "Zaškrtněte, co vezmete:", geliefertAm: "doručeno",
-    jahr: "Rok", nichtGeliefert: "✗ Nedoručeno", ohneAdresse: "Bez adresy (není na mapě)", andereJahre: "Jiné roky", jahreAlle: "Celkem", proJahr: "Podle roků",
+    jahr: "Rok", nichtGeliefert: "✗ Nedoručeno", ohneAdresse: "Bez adresy (není na mapě)", andereJahre: "Jiné roky", jahreAlle: "Celkem", proJahr: "Podle roků", proTag: "Podle dnů doručení",
     domaKg: p => `doma ${p} Kč/kg`,
     domaVergleich: (doma, plus) => `🏠 Prodej doma: ≈ ${doma} Kč · v Rakousku ${plus.startsWith("-") ? "méně" : "navíc"} <b>${plus.replace(/^[-+]/, "")} Kč</b>`,
   },
@@ -271,7 +271,7 @@ const TEXTE = {
     heim: "🏠 Zurück nach Krtely", griffTitel: "Ziehen ändert die Reihenfolge",
     fehlerZeile: (n, a) => `• ${n}: „${a}" – bitte Eintrag in Excel prüfen`, obst: "Obst",
     storno: "Stornierte Bestellungen", planKlick: "Anhaken, was mitkommt:", geliefertAm: "geliefert",
-    jahr: "Jahr", nichtGeliefert: "✗ Nicht geliefert", ohneAdresse: "Ohne Adresse (nicht auf der Karte)", andereJahre: "Andere Jahre", jahreAlle: "Gesamt", proJahr: "Nach Jahren",
+    jahr: "Jahr", nichtGeliefert: "✗ Nicht geliefert", ohneAdresse: "Ohne Adresse (nicht auf der Karte)", andereJahre: "Andere Jahre", jahreAlle: "Gesamt", proJahr: "Nach Jahren", proTag: "Nach Liefertagen",
     domaKg: p => `daheim ${p} Kč/kg`,
     domaVergleich: (doma, plus) => `🏠 Verkauf daheim (CZ): ≈ ${doma} Kč · in Österreich ${plus.startsWith("-") ? "weniger" : "mehr"} <b>${plus.replace(/^[-+]/, "")} Kč</b>`,
   },
@@ -1165,6 +1165,29 @@ function aktualisiereAnsicht(zoomen) {
     tabelle.insertAdjacentHTML("beforeend",
       `<tr><td colspan="4" style="text-align:right;color:#555;font-size:12.5px">${t("domaVergleich",
         Math.round(domaKc).toLocaleString(LOC()), (plus < 0 ? "-" : "+") + Math.abs(plus).toLocaleString(LOC()))}</td></tr>`);
+  }
+  // rozpis po dnech doručení (sloupec H): kolik se ten den rozvezlo – jen „Doručeno"/„Vše", ne v plánovači
+  if (!planModus && statusModus !== "offen") {
+    const proTag = new Map();
+    for (const z of zeilenSumme) {
+      if (!z.geliefert || !z.geliefertAm) continue;
+      const k = z.geliefertAm.getTime();
+      const e = proTag.get(k) || { kg: 0, eur: 0, orte: new Set() };
+      e.kg += z.menge; e.eur += z.summe || 0; e.orte.add(geoKey(z));
+      proTag.set(k, e);
+    }
+    if (proTag.size) {
+      tabelle.insertAdjacentHTML("beforeend",
+        `<tr><td colspan="4" style="padding-top:8px;font-size:12px;color:#555"><b>🚚 ${t("proTag")}</b></td></tr>`);
+      let sKg = 0, sEur = 0;
+      for (const [k, e] of [...proTag].sort((a, b) => a[0] - b[0])) {
+        sKg += e.kg; sEur += e.eur;
+        tabelle.insertAdjacentHTML("beforeend",
+          `<tr style="font-size:12.5px"><td>${fmtKurzDatum(new Date(k))} <span class="grau" style="color:#777">· ${zastavky(e.orte.size)}</span></td><td class="z">${fmtKg(e.kg)}</td>${hatEur ? `<td class="z">${fmtEur(e.eur)}</td><td></td>` : ""}</tr>`);
+      }
+      tabelle.insertAdjacentHTML("beforeend",
+        `<tr style="font-size:12.5px;border-top:1px solid #ddd"><td><b>${t("celkem")}</b> <span style="color:#777">· ${proTag.size} ${sprache === "cs" ? "dnů" : "Tage"}</span></td><td class="z"><b>${fmtKg(sKg)}</b></td>${hatEur ? `<td class="z"><b>${fmtEur(sEur)}</b></td><td></td>` : ""}</tr>`);
+    }
   }
   // „Celkem": rozpis po rocích (kg, €, průměr €/kg)
   if (istGesamt()) {
