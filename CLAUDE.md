@@ -60,6 +60,11 @@ Tlačítko „Celkem" (`JAHRE_ALLE`, `istGesamt()`): všechny roky dohromady, ch
 Bublina i karta ukazují „Jiné roky" — řádky ostatních roků do 300 m od zastávky (`andereJahre`).
 Geokódování běží ve frontě (`geoKette`), aby se roky nedotazovaly Nominatimu souběžně.
 
+## Rozpis po dnech
+
+V součtech (jen „Doručeno"/„Vše", ne plánovač) blok „🚚 Podle dnů doručení": doručené řádky seskupené
+podle sloupce H — datum, počet zastávek (geoKey), kg, €, dole celkem.
+
 ## Srovnání s prodejem doma
 
 `domaPreis(obst)` = za kolik by šlo ovoce prodat v ČR (Kč/kg, ceny 2026 od majitele): višně 13,
