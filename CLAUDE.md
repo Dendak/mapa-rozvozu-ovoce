@@ -6,6 +6,14 @@ v Rakousku a data vede v Excelu.
 
 **Živý web:** https://dendak.github.io/mapa-rozvozu-ovoce/ (GitHub Pages, větev `main`, kořen)
 
+## Práce napříč zařízeními
+
+- Zdroj pravdy je GitHub (`Dendak/mapa-rozvozu-ovoce`). Na začátku práce `git pull`, na konci commit + push.
+  Na `main` pushuje i skript majitele `aktualizovat-web.cmd` (nový `Obst.xlsx`), takže bez pullu hrozí konflikt.
+- Rozdělaná práce, rozhodnutí a další kroky se zapisují do [docs/POZNAMKY.md](docs/POZNAMKY.md). Na konci session je aktualizuj.
+- Repo **nedávat do OneDrive** (konflikty s `.git`). Lokálně: `C:\Users\holub\code\mapa-rozvozu-ovoce`.
+- **Push na `main` = okamžité nasazení** (GitHub Pages). Větší nebo riskantní změny dělej ve větvi a přes PR.
+
 ## Soubory
 
 - `index.html` — celá aplikace (Leaflet + OpenStreetMap, SheetJS z CDN). UI dvojjazyčné
