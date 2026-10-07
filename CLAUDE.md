@@ -4,7 +4,19 @@ Jednostránková webová aplikace (čistý HTML/JS, žádný build) pro plánov�
 ovoce po Rakousku. Majitel vozí ovoce (letos višně/Weichsel) z Krtel (CZ) zákazníkům
 v Rakousku a data vede v Excelu.
 
-**Živý web:** https://dendak.github.io/mapa-rozvozu-ovoce/ (GitHub Pages, větev `main`, kořen)
+**Živý web:** https://ovoce-holub.cz/api/mapa/ (Wedos, jen po přihlášení – vidí ji jen Pavel a Denis).
+Dřív GitHub Pages (dendak.github.io/mapa-rozvozu-ovoce) – vypne se, až bude repo soukromé.
+
+## Nasazení
+
+- `.github/workflows/deploy-wedos.yml`: každý push na `main` nahraje `index.html`, `Obst.xlsx`
+  a `Obst-Vorjahre.xlsx` přes FTP do `api/data/mapa/` na Wedos (adresář je přes web zakázaný).
+  Secrets `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` (stejné jako v `ovocnarstvi-holub`); bez nich se krok přeskočí.
+- Přihlášení (e-mail + heslo) a vydávání souborů dělá `api/mapa/index.php` v repu `Dendak/ovocnarstvi-holub`.
+  Kdo smí mapu vidět = seznam `MAPA_UCTY` tam. Excely mapa načítá relativně (`fetch("Obst.xlsx")`),
+  `api/mapa/.htaccess` je přesměruje na PHP – cesty v `index.html` proto neměnit.
+- Další soubor, který má mapa načítat, musí přibýt na třech místech: workflow (krok „Připravit soubory“),
+  `MAPA_SOUBORY` a přepis v `api/mapa/.htaccess`.
 
 ## Práce napříč zařízeními
 
@@ -12,7 +24,7 @@ v Rakousku a data vede v Excelu.
   Na `main` pushuje i skript majitele `aktualizovat-web.cmd` (nový `Obst.xlsx`), takže bez pullu hrozí konflikt.
 - Rozdělaná práce, rozhodnutí a další kroky se zapisují do [docs/POZNAMKY.md](docs/POZNAMKY.md). Na konci session je aktualizuj.
 - Repo **nedávat do OneDrive** (konflikty s `.git`). Lokálně: `C:\Users\holub\code\mapa-rozvozu-ovoce`.
-- **Push na `main` = okamžité nasazení** (GitHub Pages). Větší nebo riskantní změny dělej ve větvi a přes PR.
+- **Push na `main` = okamžité nasazení** (Wedos). Větší nebo riskantní změny dělej ve větvi a přes PR.
 
 ## Soubory
 
