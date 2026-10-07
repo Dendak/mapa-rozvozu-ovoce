@@ -4,8 +4,8 @@ Deník práce na mapě rozvozu, aby šlo navázat z jakéhokoli zařízení. Nej
 Na konci každé session: co je hotové, co je rozdělané, co dál.
 
 ## Rozdělané / další kroky
-- [ ] Mapa na Wedos za přihlášením (PR v obou repech): založit schránku `denis@ovoce-holub.cz` ve Wedosu,
-  nastavit FTP secrets v tomhle repu, sloučit PR, otestovat přihlášení Pavla i Denise.
+- [ ] Mapa na Wedos běží (https://ovoce-holub.cz/api/mapa/), FTP secrets nastavené (hlavní účet `w395099`),
+  první nahrání proběhlo. Zbývá: založit schránku `denis@ovoce-holub.cz`, otestovat přihlášení Pavla i Denise.
 - [ ] Potom repo přepnout na soukromé a vypnout GitHub Pages (data zákazníků jsou zatím veřejná).
 - [ ] `README.md` je zastaralé: popisuje výběr lokálního souboru (File System Access API), který byl odstraněn. Data se teď načítají jen z webu.
 - [ ] Na notebooku leží stará kopie v OneDrive (`…\Radtour 2026\mapa-rozvozu-ovoce`), 13 commitů pozadu, bez lokálních změn. Až nebude potřeba, smazat ručně.
