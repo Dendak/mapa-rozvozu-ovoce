@@ -1,0 +1,49 @@
+name: Nasazení mapy na Wedos (FTP)
+
+# Mapa běží na https://ovoce-holub.cz/api/mapa/ za přihlášením (skript api/mapa/index.php v repu
+# Dendak/ovocnarstvi-holub). Sem se nahrávají jen stránka a excely – do api/data/mapa/, kam web nepustí.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: wedos-mapa
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kontrola přístupu na FTP
+        id: ftp
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          if [ -z "$FTP_SERVER" ] || [ -z "$FTP_USERNAME" ] || [ -z "$FTP_PASSWORD" ]; then
+            echo "::warning::Chybí secrets FTP_SERVER / FTP_USERNAME / FTP_PASSWORD – na Wedos se nic nenahrálo."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.ftp.outputs.ok == 'true'
+
+      - name: Připravit soubory
+        if: steps.ftp.outputs.ok == 'true'
+        run: |
+          mkdir nasadit
+          cp index.html Obst.xlsx Obst-Vorjahre.xlsx nasadit/
+
+      - name: Nahrát na Wedos
+        if: steps.ftp.outputs.ok == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: nasadit/
+          server-dir: /api/data/mapa/
