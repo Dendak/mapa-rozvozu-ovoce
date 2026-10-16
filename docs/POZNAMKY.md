@@ -11,6 +11,9 @@ Na konci každé session: co je hotové, co je rozdělané, co dál.
 - [ ] Na notebooku leží stará kopie v OneDrive (`…\Radtour 2026\mapa-rozvozu-ovoce`), 13 commitů pozadu, bez lokálních změn. Až nebude potřeba, smazat ručně.
 
 ## Historie
+### 2026-10-16 (2)
+- Steinbichler (300 kg Konference, Biberbach) zrušen – neozval se. Řádek zůstal jako STORNIERT (množství 0), kontakt na příští rok.
+
 ### 2026-10-16
 - Burgstaller (1000 kg Packham, Döbriach): 26.–30. 10. pryč, dovézt až od 31. 10. (poznámka v Obst.xlsx).
 
