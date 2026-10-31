@@ -8,9 +8,13 @@ Na konci každé session: co je hotové, co je rozdělané, co dál.
   první nahrání proběhlo. Zbývá: založit schránku `denis@ovoce-holub.cz`, otestovat přihlášení Pavla i Denise.
 - [ ] Potom repo přepnout na soukromé a vypnout GitHub Pages (data zákazníků jsou zatím veřejná).
 - [ ] `README.md` je zastaralé: popisuje výběr lokálního souboru (File System Access API), který byl odstraněn. Data se teď načítají jen z webu.
+- [ ] Originál `Obst.xlsx` v OneDrive je z 29. 9. a chybí v něm změny z října (Moser, Neuwirth, Burgstaller, Steinbichler). `aktualizovat-web.cmd` by je přepsal – nejdřív originál srovnat s repem.
 - [ ] Na notebooku leží stará kopie v OneDrive (`…\Radtour 2026\mapa-rozvozu-ovoce`), 13 commitů pozadu, bez lokálních změn. Až nebude potřeba, smazat ručně.
 
 ## Historie
+### 2026-10-31
+- Martin Neuwirth (400 kg Packham, odběr ve Spittalu) zrušil. Řádek zůstal jako STORNIERT (množství 0), kontakt na příští rok.
+
 ### 2026-10-16 (2)
 - Steinbichler (300 kg Konference, Biberbach) zrušen – neozval se. Řádek zůstal jako STORNIERT (množství 0), kontakt na příští rok.
 
