@@ -12,6 +12,11 @@ Na konci každé session: co je hotové, co je rozdělané, co dál.
 - [ ] Na notebooku leží stará kopie v OneDrive (`…\Radtour 2026\mapa-rozvozu-ovoce`), 13 commitů pozadu, bez lokálních změn. Až nebude potřeba, smazat ručně.
 
 ## Historie
+### 2026-11-05
+- Burgstaller doručen: 1000 kg Packham za 1 100 € (datum doručení zapsáno 5. 11. – upřesnit, pokud jel jindy).
+- L K (landwirt.com, Ramingstein) zrušeno – neodpověděl(a); STORNIERT, množství 0.
+- Nová objednávka Gasteiger 600 kg Packham za 1 €/kg (nedoručeno).
+
 ### 2026-10-31
 - Martin Neuwirth (400 kg Packham, odběr ve Spittalu) zrušil. Řádek zůstal jako STORNIERT (množství 0), kontakt na příští rok.
 
