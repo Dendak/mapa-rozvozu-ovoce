@@ -12,6 +12,12 @@ Na konci každé session: co je hotové, co je rozdělané, co dál.
 - [ ] Na notebooku leží stará kopie v OneDrive (`…\Radtour 2026\mapa-rozvozu-ovoce`), 13 commitů pozadu, bez lokálních změn. Až nebude potřeba, smazat ručně.
 
 ## Historie
+### 2026-11-26
+- Doručeno Jakob Lukasser Weitlaner (Schrottendorf 7, 9911 Assling): 1850 kg hrušek Novembra paušálem 1300 €
+  (≈ 0,70 €/kg), odvezeno 21. 11.
+- Gasteiger Packham doručen: 600 kg paušálem 500 € (≈ 0,83 €/kg; objednáno za 1 €/kg). Datum zapsáno 26. 11. – upřesnit.
+- Nová odrůda „Birnen Novembra“: barva `#3a9d8f`, překlad v `OBST_CS`, doma počítána jako ostatní hrušky (7 Kč/kg).
+
 ### 2026-11-05
 - Burgstaller doručen: 1000 kg Packham za 1 100 € (datum doručení zapsáno 5. 11. – upřesnit, pokud jel jindy).
 - L K (landwirt.com, Ramingstein) zrušeno – neodpověděl(a); STORNIERT, množství 0.
