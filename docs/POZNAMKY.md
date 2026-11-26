@@ -13,6 +13,8 @@ Na konci každé session: co je hotové, co je rozdělané, co dál.
 
 ## Historie
 ### 2026-11-26
+- Frutteria GmbH (Sonystraße 8, 5081 Anif), faktura 202, doručeno 10. 11.: 130 kg Novembra à 2,00 € a 312 kg jablek Idared à 0,50 €
+  (celkem 416 €). Součtový řádek v Obst.xlsx rozšířen na C2:C74 / E2:E74.
 - Doručeno Jakob Lukasser Weitlaner (Schrottendorf 7, 9911 Assling): 1850 kg hrušek Novembra paušálem 1300 €
   (≈ 0,70 €/kg), odvezeno 21. 11.
 - Gasteiger Packham doručen: 600 kg paušálem 500 € (≈ 0,83 €/kg; objednáno za 1 €/kg). Datum zapsáno 26. 11. – upřesnit.
